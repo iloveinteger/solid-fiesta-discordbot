@@ -17,12 +17,6 @@ export const commandBuilders = [
               { name: '봇 대전', value: 'bot' },
               { name: '사회자 모드', value: 'referee' },
             ),
-        )
-        .addStringOption((option) =>
-          option
-            .setName('first')
-            .setDescription('봇 대전에서 먼저 시작할 쪽 (기본: 사용자)')
-            .addChoices({ name: '사용자', value: 'user' }, { name: '봇', value: 'bot' }),
         ),
     ),
   new SlashCommandBuilder()

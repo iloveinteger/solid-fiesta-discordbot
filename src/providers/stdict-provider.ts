@@ -125,7 +125,7 @@ export class StdictProvider {
     const cached = this.#detailCache.get(targetCode);
     if (cached) return cached.value;
     const payload = await this.request('https://stdict.korean.go.kr/api/view.do', {
-      method: 'TARGET_CODE',
+      method: 'target_code',
       q: targetCode,
       req_type: 'json',
     });

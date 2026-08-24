@@ -102,4 +102,33 @@ describe('표준국어대사전 응답 파싱', () => {
     await provider.search(' 눈 ');
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+
+  it('상세 API에 공식 target_code 방식을 전송한다', async () => {
+    const detailFixture = {
+      channel: {
+        item: {
+          word_info: {
+            word: '눈',
+            pos_info: {
+              pos: '명사',
+              comm_pattern_info: { sense_info: { definition: '보는 기관.' } },
+            },
+          },
+        },
+      },
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(JSON.stringify(detailFixture), { status: 200 }));
+    const provider = new StdictProvider('secret', fetcher);
+
+    await expect(provider.detail('123')).resolves.toMatchObject({ word: '눈' });
+    const [endpoint, options] = fetcher.mock.calls[0] ?? [];
+    expect(endpoint).toBe('https://stdict.korean.go.kr/api/view.do');
+    expect(endpoint).not.toContain('secret');
+    expect(options?.method).toBe('POST');
+    expect(options?.body).toBeInstanceOf(URLSearchParams);
+    expect((options?.body as URLSearchParams).get('method')).toBe('target_code');
+    expect((options?.body as URLSearchParams).get('q')).toBe('123');
+  });
 });

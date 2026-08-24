@@ -1,19 +1,19 @@
 # solid-fiesta-discordbot
 
-개인 및 소규모 Discord 서버를 위한 Node.js + TypeScript + discord.js 유틸리티 봇입니다. 일반 메시지를 읽지 않고 슬래시 명령어, 버튼, 모달로만 동작합니다.
+개인 및 소규모 Discord 서버를 위한 Node.js + TypeScript + discord.js 유틸리티 봇입니다. 슬래시 명령어와 버튼을 중심으로 동작하며, 제곱수놀이가 진행 중일 때만 현재 참가자의 숫자 메시지를 판정합니다.
 
 ## 기능
 
-| 명령어                                   | 설명                                                                         |
-| ---------------------------------------- | ---------------------------------------------------------------------------- |
-| `/square start mode:bot first:user\|bot` | 사용자와 봇이 1, 4, 9…를 번갈아 제출합니다. 봇은 0.7~1.8초 뒤 정답을 냅니다. |
-| `/square start mode:referee`             | 참가자를 모아 차례를 진행합니다. 오답 또는 10초 시간 초과 시 탈락합니다.     |
-| `/factor number:<자연수>`                | 최대 80자리 자연수를 worker thread에서 소인수분해합니다.                     |
-| `/exchange`                              | USD/KRW, JPY/KRW, 100 JPY/KRW와 출처·기준일·조회 시각을 표시합니다.          |
-| `/dice`                                  | `crypto.randomInt(1, 7)`로 6면체 주사위를 굴립니다.                          |
-| `/dict word:<검색어>`                    | 표준국어대사전 동음이의어를 최대 10개 찾고 버튼으로 상세 정보를 표시합니다.  |
+| 명령어                       | 설명                                                                        |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `/square start mode:bot`     | 사용자가 먼저 시작해 봇과 1, 4, 9…를 번갈아 채팅으로 입력합니다.            |
+| `/square start mode:referee` | 참가자를 모아 채팅으로 차례를 진행합니다. 10초 시간 초과 시 탈락합니다.     |
+| `/factor number:<자연수>`    | 최대 80자리 자연수를 worker thread에서 소인수분해합니다.                    |
+| `/exchange`                  | USD/KRW, JPY/KRW와 출처·기준일·조회 시각을 표시합니다.                      |
+| `/dice`                      | `crypto.randomInt(1, 7)`로 6면체 주사위를 굴립니다.                         |
+| `/dict word:<검색어>`        | 표준국어대사전 동음이의어를 최대 10개 찾고 버튼으로 상세 정보를 표시합니다. |
 
-게임과 모든 캐시는 프로세스 메모리에만 존재합니다. 소인수분해 성공 결과는 실행 중 메모리에 캐시하며, 환율은 10분, 사전 검색은 3분, 사전 상세는 5분 캐시합니다. 재시작하면 캐시가 비워지고 진행 중 게임은 종료됩니다. 정상적인 `SIGTERM`/`SIGINT` 종료에서는 진행 중 게임 메시지를 종료 상태로 바꾸고 타이머를 정리하며, 비정상 종료 뒤 남은 버튼과 모달은 재시작 후 만료된 것으로 안내됩니다.
+게임과 모든 캐시는 프로세스 메모리에만 존재합니다. 소인수분해 성공 결과는 실행 중 메모리에 캐시하며, 환율은 10분, 사전 검색은 3분, 사전 상세는 5분 캐시합니다. 재시작하면 캐시가 비워지고 진행 중 게임은 종료됩니다. 정상적인 `SIGTERM`/`SIGINT` 종료에서는 진행 중 게임 메시지를 종료 상태로 바꾸고 타이머를 정리하며, 비정상 종료 뒤 남은 버튼은 재시작 후 만료된 것으로 안내됩니다.
 
 ## 요구 사항
 
@@ -41,8 +41,9 @@
 
 1. [Discord Developer Portal](https://discord.com/developers/applications)에서 애플리케이션을 만듭니다.
 2. **Bot > Add Bot**으로 봇을 추가하고 Token을 재발급해 `.env`의 `DISCORD_BOT_TOKEN`에 넣습니다.
-3. **OAuth2 > URL Generator**에서 `bot`, `applications.commands` 스코프를 선택합니다.
-4. 다음 최소 권한만 선택해 서버에 초대합니다.
+3. **Bot > Privileged Gateway Intents**에서 **Message Content Intent**를 켭니다. 제곱수 채팅 입력에 필요합니다.
+4. **OAuth2 > URL Generator**에서 `bot`, `applications.commands` 스코프를 선택합니다.
+5. 다음 최소 권한만 선택해 서버에 초대합니다.
    - View Channels
    - Send Messages
    - Embed Links
@@ -54,7 +55,7 @@ Application ID로 직접 만드는 초대 URL은 다음과 같습니다.
 https://discord.com/oauth2/authorize?client_id=DISCORD_APPLICATION_ID&scope=bot%20applications.commands&permissions=2147534848
 ```
 
-봇은 `Guilds` 인텐트만 사용하므로 Message Content privileged intent를 켤 필요가 없습니다.
+봇은 `Guilds`, `GuildMessages`, `MessageContent` 인텐트를 사용합니다. 메시지 이벤트는 제곱수 게임이 진행 중인 채널에서 현재 차례 참가자가 보낸 순수한 숫자만 처리하고 나머지는 무시합니다. 오답이어도 10초 제한 시간이 끝나기 전까지 다시 입력할 수 있습니다.
 
 ## 로컬 실행
 

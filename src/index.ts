@@ -8,7 +8,13 @@ import { FactorService } from './services/factor/factor-service.js';
 import { SquareGameManager } from './services/square-game-manager.js';
 
 const config = loadConfig();
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
 const squareGames = new SquareGameManager();
 const handler = new CommandHandler({
   factorService: new FactorService(),
@@ -25,10 +31,13 @@ client.on(Events.InteractionCreate, (interaction) => {
   void (async () => {
     if (interaction.isChatInputCommand()) await handler.handleCommand(interaction);
     else if (interaction.isButton()) await handler.handleButton(interaction);
-    else if (interaction.isModalSubmit() && squareGames.ownsModal(interaction.customId)) {
-      await squareGames.handleModal(interaction);
-    }
   })().catch((error: unknown) => console.error('상호작용 처리 실패:', error));
+});
+
+client.on(Events.MessageCreate, (message) => {
+  void squareGames
+    .handleMessage(message)
+    .catch((error: unknown) => console.error('제곱수놀이 메시지 처리 실패:', error));
 });
 
 let shuttingDown = false;

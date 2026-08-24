@@ -4,12 +4,7 @@ import {
   ButtonInteraction,
   ButtonStyle,
   ChatInputCommandInteraction,
-  LabelBuilder,
   Message,
-  ModalBuilder,
-  ModalSubmitInteraction,
-  TextInputBuilder,
-  TextInputStyle,
 } from 'discord.js';
 
 type GameMode = 'bot' | 'referee';
@@ -44,7 +39,6 @@ const IDS = {
   join: 'square:join',
   begin: 'square:begin',
   cancel: 'square:cancel',
-  answer: 'square:answer',
 } as const;
 
 function mention(userId: string): string {
@@ -53,6 +47,15 @@ function mention(userId: string): string {
 
 function expected(game: SquareGame): bigint {
   return game.expectedIndex * game.expectedIndex;
+}
+
+export function classifySquareSubmission(
+  raw: string,
+  target: bigint,
+): 'ignore' | 'correct' | 'wrong' {
+  const normalized = raw.trim();
+  if (!/^\d+$/.test(normalized)) return 'ignore';
+  return BigInt(normalized) === target ? 'correct' : 'wrong';
 }
 
 function rows(game: SquareGame): ActionRowBuilder<ButtonBuilder>[] {
@@ -73,10 +76,6 @@ function rows(game: SquareGame): ActionRowBuilder<ButtonBuilder>[] {
   }
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(IDS.answer)
-        .setLabel('입력하기')
-        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId(IDS.cancel).setLabel('취소').setStyle(ButtonStyle.Danger),
     ),
   ];
@@ -88,7 +87,9 @@ function content(game: SquareGame): string {
     : '아직 제출된 숫자가 없습니다.';
   if (game.mode === 'bot') {
     const turn =
-      game.turn === 'user' ? `${mention(game.userId)}님의 차례 (10초)` : '봇이 생각하는 중…';
+      game.turn === 'user'
+        ? `${mention(game.userId)}님의 차례 (10초) · 채팅창에 숫자를 입력하세요.`
+        : '봇이 생각하는 중…';
     return `## 제곱수놀이 · 봇 대전\n${turn}\n다음 순서: **${game.expectedIndex}번째 제곱수**\n\n${recent}`;
   }
   if (game.phase === 'lobby') {
@@ -98,7 +99,7 @@ function content(game: SquareGame): string {
     return `## 제곱수놀이 · 사회자 모드\n참가자: ${participants}\n방장이 2명 이상 모인 뒤 시작할 수 있습니다.`;
   }
   const current = game.participants[game.turnIndex];
-  return `## 제곱수놀이 · 사회자 모드\n${current ? mention(current) : '알 수 없음'}님의 차례 (10초)\n다음 순서: **${game.expectedIndex}번째 제곱수**\n생존자: ${game.participants.map(mention).join(', ')}\n\n${recent}`;
+  return `## 제곱수놀이 · 사회자 모드\n${current ? mention(current) : '알 수 없음'}님의 차례 (10초) · 채팅창에 숫자를 입력하세요.\n다음 순서: **${game.expectedIndex}번째 제곱수**\n생존자: ${game.participants.map(mention).join(', ')}\n\n${recent}`;
 }
 
 export class SquareGameManager {
@@ -134,21 +135,16 @@ export class SquareGameManager {
             ...base,
             mode,
             userId: interaction.user.id,
-            turn: interaction.options.getString('first') === 'bot' ? 'bot' : 'user',
+            turn: 'user',
           }
         : { ...base, mode, phase: 'lobby', participants: [interaction.user.id], turnIndex: 0 };
     this.#games.set(channelId, game);
     await this.render(game);
-    if (game.mode === 'bot' && game.turn === 'bot') this.scheduleBot(game);
-    else if (game.mode === 'bot') this.scheduleTimeout(game);
+    if (game.mode === 'bot') this.scheduleTimeout(game);
   }
 
   public ownsButton(customId: string): boolean {
     return Object.values(IDS).includes(customId as (typeof IDS)[keyof typeof IDS]);
-  }
-
-  public ownsModal(customId: string): boolean {
-    return customId.startsWith('square:modal:');
   }
 
   public async handleButton(interaction: ButtonInteraction): Promise<void> {
@@ -170,42 +166,35 @@ export class SquareGameManager {
       case IDS.cancel:
         await this.cancel(interaction, game);
         return;
-      case IDS.answer:
-        await this.showAnswerModal(interaction, game);
     }
   }
 
-  public async handleModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const game = interaction.channelId ? this.#games.get(interaction.channelId) : undefined;
-    if (!game || interaction.customId !== `square:modal:${game.revision}`) {
-      await interaction.reply({ content: '이 입력 창은 만료되었습니다.', ephemeral: true });
+  public async handleMessage(message: Message): Promise<void> {
+    if (message.author.bot || !message.inGuild()) return;
+    const game = this.#games.get(message.channelId);
+    if (!game) return;
+    const currentUser = game.mode === 'bot' ? game.userId : game.participants[game.turnIndex];
+    if (
+      currentUser !== message.author.id ||
+      (game.mode === 'bot' && game.turn !== 'user') ||
+      (game.mode === 'referee' && game.phase !== 'playing')
+    ) {
       return;
     }
-    const currentUser = game.mode === 'bot' ? game.userId : game.participants[game.turnIndex];
-    if (currentUser !== interaction.user.id) {
-      await interaction.reply({
-        content: '현재 차례인 참가자만 답할 수 있습니다.',
-        ephemeral: true,
-      });
+    const raw = message.content.trim();
+    const target = expected(game);
+    const submission = classifySquareSubmission(raw, target);
+    if (submission === 'ignore') return;
+    if (submission === 'wrong') {
+      game.history.push(`${mention(message.author.id)}: ${raw.slice(0, 50)} ❌`);
+      await this.render(
+        game,
+        `${mention(message.author.id)}님, 오답입니다. 남은 시간 안에 다시 입력하세요.`,
+      );
       return;
     }
     this.clearTimer(game);
-    const raw = interaction.fields.getTextInputValue('number').trim();
-    const submitted = /^\d+$/.test(raw) ? BigInt(raw) : undefined;
-    const target = expected(game);
-    await interaction.deferUpdate();
-    if (submitted !== target) {
-      game.history.push(
-        `${mention(interaction.user.id)}: ${raw || '(빈 입력)'} ❌ (정답 ${target})`,
-      );
-      if (game.mode === 'bot') {
-        await this.finish(game, `${mention(game.userId)}님이 틀렸습니다. **봇 승리!**`);
-      } else {
-        await this.eliminateAndContinue(game, interaction.user.id, '오답');
-      }
-      return;
-    }
-    game.history.push(`${mention(interaction.user.id)}: ${target} ✅`);
+    game.history.push(`${mention(message.author.id)}: ${target} ✅`);
     game.expectedIndex += 1n;
     if (game.mode === 'bot') {
       game.turn = 'bot';
@@ -281,39 +270,6 @@ export class SquareGameManager {
       content: `${content(game)}\n\n게임이 취소되었습니다.`,
       components: [],
     });
-  }
-
-  private async showAnswerModal(interaction: ButtonInteraction, game: SquareGame): Promise<void> {
-    const currentUser =
-      game.mode === 'bot'
-        ? game.turn === 'user'
-          ? game.userId
-          : undefined
-        : game.phase === 'playing'
-          ? game.participants[game.turnIndex]
-          : undefined;
-    if (currentUser !== interaction.user.id) {
-      await interaction.reply({
-        content: '현재 차례인 참가자만 입력할 수 있습니다.',
-        ephemeral: true,
-      });
-      return;
-    }
-    const modal = new ModalBuilder()
-      .setCustomId(`square:modal:${game.revision}`)
-      .setTitle('다음 제곱수 입력')
-      .addLabelComponents(
-        new LabelBuilder()
-          .setLabel(`${game.expectedIndex}번째 제곱수`)
-          .setTextInputComponent(
-            new TextInputBuilder()
-              .setCustomId('number')
-              .setStyle(TextInputStyle.Short)
-              .setRequired(true)
-              .setMaxLength(100),
-          ),
-      );
-    await interaction.showModal(modal);
   }
 
   private scheduleBot(game: BotGame): void {

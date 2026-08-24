@@ -69,8 +69,7 @@ export class CommandHandler {
       embeds: [
         new EmbedBuilder()
           .setTitle('소인수분해')
-          .setDescription(`**${result.input} = ${result.formatted}**`)
-          .setFooter({ text: result.cached ? '메모리 캐시 결과' : '새로 계산한 결과' }),
+          .setDescription(`**${result.input} = ${result.formatted}**`),
       ],
     });
   }
@@ -84,7 +83,6 @@ export class CommandHandler {
       .addFields(
         { name: '1 USD', value: `${number.format(rates.usdKrw)} KRW`, inline: true },
         { name: '1 JPY', value: `${number.format(rates.jpyKrw)} KRW`, inline: true },
-        { name: '100 JPY', value: `${number.format(rates.jpyKrw * 100)} KRW`, inline: true },
       )
       .setDescription('은행 고시환율 및 실제 거래 환율과 차이가 날 수 있습니다.')
       .setFooter({
@@ -96,11 +94,7 @@ export class CommandHandler {
   private async dice(interaction: ChatInputCommandInteraction): Promise<void> {
     const value = rollDice();
     await interaction.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle(`${DICE_EMOJI[value]}  ${value}`)
-          .setDescription('1부터 6까지 · 암호학적 난수로 균등 추출'),
-      ],
+      embeds: [new EmbedBuilder().setTitle(`${DICE_EMOJI[value]}  ${value}`)],
     });
   }
 
@@ -113,9 +107,7 @@ export class CommandHandler {
       await interaction.editReply('표준국어대사전에서 일치하는 결과를 찾지 못했습니다.');
       return;
     }
-    const embed = new EmbedBuilder().setTitle('표준국어대사전 검색 결과').setFooter({
-      text: '출처: 국립국어원 표준국어대사전 Open API',
-    });
+    const embed = new EmbedBuilder().setTitle('표준국어대사전 검색 결과');
     for (const [index, item] of results.entries()) {
       const shoulder = item.homonymNumber ? ` ${item.homonymNumber}` : '';
       embed.addFields({
@@ -130,7 +122,7 @@ export class CommandHandler {
           ...results.slice(offset, offset + 5).map((item, index) =>
             new ButtonBuilder()
               .setCustomId(`dict:detail:${item.targetCode}`)
-              .setLabel(`${offset + index + 1}번 상세 보기`)
+              .setLabel(`${offset + index + 1}`)
               .setStyle(ButtonStyle.Secondary),
           ),
         ),
@@ -157,8 +149,7 @@ export class CommandHandler {
           .setTitle(detail.word)
           .setDescription(
             truncate([...metadata, ...descriptions].join('\n\n') || '상세 정보가 없습니다.', 4_000),
-          )
-          .setFooter({ text: '출처: 국립국어원 표준국어대사전 Open API' }),
+          ),
       ],
     });
   }
