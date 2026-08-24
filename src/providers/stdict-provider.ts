@@ -101,6 +101,30 @@ export function parseDetailResponse(payload: unknown, targetCode: string): Dicti
   return { targetCode, word, pronunciation, origins, senses };
 }
 
+export function selectSearchResultDetail(
+  detail: DictionaryDetail,
+  selected: DictionarySearchItem,
+): DictionaryDetail {
+  const definitionPrefix = selected.definition.endsWith('…')
+    ? selected.definition.slice(0, -1)
+    : selected.definition;
+  const matchingSense = detail.senses.find(
+    (sense) =>
+      sense.partOfSpeech === selected.partOfSpeech &&
+      (sense.definition === selected.definition || sense.definition.startsWith(definitionPrefix)),
+  );
+  return {
+    ...detail,
+    senses: [
+      matchingSense ?? {
+        partOfSpeech: selected.partOfSpeech,
+        definition: selected.definition,
+        examples: [],
+      },
+    ],
+  };
+}
+
 const XML_PARSER = new XMLParser({
   ignoreAttributes: true,
   parseTagValue: false,
@@ -126,6 +150,7 @@ export function parseDetailXmlResponse(xml: string, targetCode: string): Diction
 export class StdictProvider {
   readonly #searchCache = new TtlCache<string, DictionarySearchItem[]>(3 * 60 * 1_000);
   readonly #detailCache = new TtlCache<string, DictionaryDetail>(5 * 60 * 1_000);
+  readonly #selectionCache = new TtlCache<string, DictionarySearchItem>(5 * 60 * 1_000);
 
   public constructor(
     private readonly apiKey: string,
@@ -143,6 +168,7 @@ export class StdictProvider {
       num: '10',
     });
     const parsed = parseSearchResponse(payload);
+    for (const item of parsed) this.#selectionCache.set(item.targetCode, item);
     this.#searchCache.set(normalized, parsed);
     return parsed;
   }
@@ -156,7 +182,11 @@ export class StdictProvider {
       q: targetCode,
       req_type: 'xml',
     });
-    const parsed = parseDetailXmlResponse(payload, targetCode);
+    const parsedDetail = parseDetailXmlResponse(payload, targetCode);
+    const selected = this.#selectionCache.get(targetCode)?.value;
+    const parsed = selected
+      ? selectSearchResultDetail(parsedDetail, selected)
+      : { ...parsedDetail, senses: parsedDetail.senses.slice(0, 1) };
     this.#detailCache.set(targetCode, parsed);
     return parsed;
   }

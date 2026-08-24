@@ -82,18 +82,18 @@ npm run build
 
 ## Oracle Ubuntu VM 배포
 
-Oracle Ubuntu VM에는 Node.js 24 LTS와 npm을 설치하고, 봇 전용 비로그인 사용자가 저장소와 `.env`를 읽을 수 있게 준비합니다. 아래 예시는 저장소가 `/opt/solid-fiesta-discordbot`, 실행 사용자가 `discordbot`인 경우입니다.
+Oracle Ubuntu VM에는 Node.js 24 LTS와 npm을 설치하고, `ubuntu` 계정이 저장소와 `.env`를 읽을 수 있게 준비합니다. 저장소 경로는 `/home/ubuntu/discord-utility-bot`입니다.
 
 코드를 배포할 때 의존성을 잠금 파일 그대로 설치하고 빌드합니다.
 
 ```bash
-cd /opt/solid-fiesta-discordbot
+cd /home/ubuntu/discord-utility-bot
 npm ci
 npm run build
 npm run register
 ```
 
-`/etc/systemd/system/solid-fiesta-discordbot.service`를 생성합니다.
+`/etc/systemd/system/discord-utility-bot.service`를 생성합니다.
 
 ```ini
 [Unit]
@@ -103,18 +103,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=discordbot
-Group=discordbot
-WorkingDirectory=/opt/solid-fiesta-discordbot
-EnvironmentFile=/opt/solid-fiesta-discordbot/.env
-ExecStart=/usr/bin/node --enable-source-maps /opt/solid-fiesta-discordbot/dist/index.js
-Restart=on-failure
+User=ubuntu
+WorkingDirectory=/home/ubuntu/discord-utility-bot
+EnvironmentFile=/home/ubuntu/discord-utility-bot/.env
+ExecStart=/usr/bin/node --enable-source-maps /home/ubuntu/discord-utility-bot/dist/index.js
+Restart=always
 RestartSec=5
 TimeoutStopSec=20
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
@@ -124,12 +122,21 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now solid-fiesta-discordbot
-sudo systemctl status solid-fiesta-discordbot
-journalctl -u solid-fiesta-discordbot -f
+sudo systemctl enable --now discord-utility-bot.service
+sudo systemctl status discord-utility-bot.service
+journalctl -u discord-utility-bot.service -f
 ```
 
-업데이트할 때는 새 코드를 받은 뒤 `npm ci`, `npm run build`를 실행하고 `sudo systemctl restart solid-fiesta-discordbot`으로 재시작합니다. 토큰이나 API 키를 journal에 직접 출력하지 마세요.
+업데이트할 때는 새 코드를 받은 뒤 `npm ci`, `npm run build`, `npm run register`를 실행하고 `sudo systemctl restart discord-utility-bot.service`로 재시작합니다. 토큰이나 API 키를 journal에 직접 출력하지 마세요.
+
+### GitHub Actions 자동 배포
+
+`main` 브랜치에 push하면 `.github/workflows/deploy.yml`이 `/home/ubuntu/discord-utility-bot`을 갱신하고 빌드·명령 등록 후 `discord-utility-bot.service`를 재시작합니다. 저장소의 **Settings > Secrets and variables > Actions**에 다음 GitHub Actions Secret을 등록합니다.
+
+- `ORACLE_HOST`: Oracle Ubuntu VM의 호스트명 또는 IP 주소
+- `ORACLE_SSH_PRIVATE_KEY`: `ubuntu` 계정에 접속할 전용 SSH private key 전체
+
+배포는 SSH `known_hosts`를 구성하고 엄격한 host key 검증을 사용합니다. 서버의 `.env`는 Git에서 추적하지 않으며 배포 과정에서 생성·수정·출력하지 않습니다. 배포용 `ubuntu` 계정은 비대화형으로 `systemctl restart`와 `systemctl is-active`를 실행할 수 있어야 합니다.
 
 ## 구현과 운영 제한
 

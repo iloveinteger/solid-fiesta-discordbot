@@ -3,6 +3,7 @@ import {
   parseDetailResponse,
   parseDetailXmlResponse,
   parseSearchResponse,
+  selectSearchResultDetail,
   StdictProvider,
   validateQuery,
 } from '../src/providers/stdict-provider.js';
@@ -107,6 +108,30 @@ describe('표준국어대사전 응답 파싱', () => {
     });
   });
 
+  it('사용자가 선택한 검색 결과의 뜻 하나만 상세 결과에 남긴다', () => {
+    const detail = {
+      targetCode: '123',
+      word: '눈',
+      pronunciation: ['눈'],
+      origins: [],
+      senses: [
+        { partOfSpeech: '명사', definition: '빛을 감지하는 감각 기관.', examples: ['눈을 뜨다.'] },
+        { partOfSpeech: '명사', definition: '물체를 보는 능력.', examples: ['눈이 좋다.'] },
+      ],
+    };
+
+    const selected = parseSearchResponse(searchFixture)[0];
+    if (!selected) throw new Error('검색 결과 fixture가 필요합니다.');
+    expect(selectSearchResultDetail(detail, selected)).toMatchObject({
+      senses: [
+        {
+          definition: '빛을 감지하는 감각 기관.',
+          examples: ['눈을 뜨다.'],
+        },
+      ],
+    });
+  });
+
   it('입력과 API 오류를 검증한다', async () => {
     expect(() => validateQuery('')).toThrow('1~50자');
     expect(() => validateQuery('가\u0000나')).toThrow('제어 문자');
@@ -144,5 +169,23 @@ describe('표준국어대사전 응답 파싱', () => {
     expect((options?.body as URLSearchParams).get('method')).toBe('target_code');
     expect((options?.body as URLSearchParams).get('q')).toBe('123');
     expect((options?.body as URLSearchParams).get('req_type')).toBe('xml');
+  });
+
+  it('검색 후 상세 조회에서는 선택한 뜻만 반환한다', async () => {
+    const detailFixture = `<xml><channel><item><word_info><word>눈</word></word_info>
+      <pos_info><pos>명사</pos><comm_pattern_info>
+        <sense_info><definition>빛을 감지하는 감각 기관.</definition></sense_info>
+        <sense_info><definition>물체를 보는 능력.</definition></sense_info>
+      </comm_pattern_info></pos_info></item></channel></xml>`;
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(searchFixture), { status: 200 }))
+      .mockResolvedValueOnce(new Response(detailFixture, { status: 200 }));
+    const provider = new StdictProvider('secret', fetcher);
+
+    await provider.search('눈');
+    await expect(provider.detail('123')).resolves.toMatchObject({
+      senses: [{ definition: '빛을 감지하는 감각 기관.' }],
+    });
   });
 });
