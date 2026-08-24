@@ -8,10 +8,10 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.json",
     "start": "node --enable-source-maps dist/index.js",
-    "dev": "npm run build && node --watch --enable-source-maps dist/src/index.js",
-    "register": "npm run build && node dist/src/register-commands.js",
+    "register": "node dist/register-commands.js",
     "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write .",

@@ -11,7 +11,6 @@ import type { StdictProvider } from '../providers/stdict-provider.js';
 import type { ExchangeService } from '../services/exchange-service.js';
 import type { FactorService } from '../services/factor/factor-service.js';
 import { DICE_EMOJI, rollDice } from '../services/dice.js';
-import type { DockerPythonRunner } from '../services/python-runner.js';
 import type { SquareGameManager } from '../services/square-game-manager.js';
 import { errorMessage, truncate } from '../utils/errors.js';
 
@@ -19,8 +18,6 @@ export interface CommandDependencies {
   factorService: FactorService;
   exchangeService: ExchangeService;
   dictionary: StdictProvider;
-  pythonRunner: DockerPythonRunner;
-  pythonEnabled: boolean;
   squareGames: SquareGameManager;
 }
 
@@ -44,9 +41,6 @@ export class CommandHandler {
           break;
         case 'dict':
           await this.dictionary(interaction);
-          break;
-        case 'python':
-          await this.python(interaction);
           break;
       }
     } catch (error) {
@@ -76,7 +70,7 @@ export class CommandHandler {
         new EmbedBuilder()
           .setTitle('소인수분해')
           .setDescription(`**${result.input} = ${result.formatted}**`)
-          .setFooter({ text: result.cached ? 'SQLite 캐시 결과' : '새로 계산한 결과' }),
+          .setFooter({ text: result.cached ? '메모리 캐시 결과' : '새로 계산한 결과' }),
       ],
     });
   }
@@ -167,23 +161,6 @@ export class CommandHandler {
           .setFooter({ text: '출처: 국립국어원 표준국어대사전 Open API' }),
       ],
     });
-  }
-
-  private async python(interaction: ChatInputCommandInteraction): Promise<void> {
-    if (!this.dependencies.pythonEnabled) {
-      await interaction.reply({
-        content: 'Python 실행 기능이 비활성화되어 있습니다.',
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const result = await this.dependencies.pythonRunner.run(
-      interaction.options.getString('code', true),
-    );
-    await interaction.editReply(
-      `**${result.status}**\n\n\`\`\`text\n${truncate(result.output.replaceAll('```', '``\\`'), 7_500)}\n\`\`\``,
-    );
   }
 
   private async sendError(

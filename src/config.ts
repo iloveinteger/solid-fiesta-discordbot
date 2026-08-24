@@ -5,9 +5,6 @@ export interface Config {
   applicationId: string;
   guildId?: string;
   stdictApiKey: string;
-  databasePath: string;
-  enablePythonRunner: boolean;
-  pythonRunnerImage: string;
 }
 
 function required(name: string): string {
@@ -18,17 +15,10 @@ function required(name: string): string {
 
 export function loadConfig(): Config {
   const guildId = process.env.DISCORD_GUILD_ID?.trim();
-  const databasePath = process.env.DATABASE_PATH?.trim();
-  const pythonRunnerImage = process.env.PYTHON_RUNNER_IMAGE?.trim();
   return {
     discordToken: required('DISCORD_BOT_TOKEN'),
     applicationId: required('DISCORD_APPLICATION_ID'),
     ...(guildId ? { guildId } : {}),
     stdictApiKey: required('STDICT_API_KEY'),
-    databasePath: databasePath?.length ? databasePath : './data/bot.sqlite',
-    enablePythonRunner: (process.env.ENABLE_PYTHON_RUNNER ?? 'true').toLowerCase() === 'true',
-    pythonRunnerImage: pythonRunnerImage?.length
-      ? pythonRunnerImage
-      : 'solid-fiesta-python-runner:latest',
   };
 }

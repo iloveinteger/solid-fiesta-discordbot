@@ -1,5 +1,4 @@
 import { Worker } from 'node:worker_threads';
-import type { FactorCacheRepository } from '../../repositories/factor-cache-repository.js';
 import { formatFactors, parseNaturalNumber } from './number-theory.js';
 
 interface WorkerResponse {
@@ -15,8 +14,9 @@ export interface FactorResult {
 }
 
 export class FactorService {
+  readonly #cache = new Map<string, bigint[]>();
+
   public constructor(
-    private readonly repository: FactorCacheRepository,
     private readonly timeoutMs = 8_000,
     private readonly maximumDigits = 80,
   ) {}
@@ -24,12 +24,12 @@ export class FactorService {
   public async calculate(raw: string): Promise<FactorResult> {
     const input = parseNaturalNumber(raw, this.maximumDigits);
     const key = input.toString();
-    const cached = this.repository.get(key);
+    const cached = this.#cache.get(key);
     if (cached)
       return { input, factors: cached, formatted: formatFactors(input, cached), cached: true };
 
     const factors = await this.runWorker(key);
-    this.repository.put(key, factors);
+    this.#cache.set(key, factors);
     return { input, factors, formatted: formatFactors(input, factors), cached: false };
   }
 

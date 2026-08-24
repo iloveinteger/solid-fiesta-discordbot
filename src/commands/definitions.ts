@@ -39,16 +39,6 @@ export const commandBuilders = [
     .addStringOption((option) =>
       option.setName('word').setDescription('검색할 단어').setRequired(true).setMaxLength(50),
     ),
-  new SlashCommandBuilder()
-    .setName('python')
-    .setDescription('격리 환경에서 제한된 Python 코드를 실행합니다')
-    .addStringOption((option) =>
-      option
-        .setName('code')
-        .setDescription('실행할 Python 코드')
-        .setRequired(true)
-        .setMaxLength(4_000),
-    ),
 ];
 
 export const commandData = commandBuilders.map((command) => command.toJSON());

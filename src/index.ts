@@ -3,27 +3,17 @@ import { CommandHandler } from './commands/command-handler.js';
 import { loadConfig } from './config.js';
 import { FrankfurterProvider } from './providers/exchange-provider.js';
 import { StdictProvider } from './providers/stdict-provider.js';
-import { openDatabase } from './repositories/database.js';
-import { SqliteExchangeCacheRepository } from './repositories/exchange-cache-repository.js';
-import { SqliteFactorCacheRepository } from './repositories/factor-cache-repository.js';
 import { ExchangeService } from './services/exchange-service.js';
 import { FactorService } from './services/factor/factor-service.js';
-import { DockerPythonRunner } from './services/python-runner.js';
 import { SquareGameManager } from './services/square-game-manager.js';
 
 const config = loadConfig();
-const database = openDatabase(config.databasePath);
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const squareGames = new SquareGameManager();
 const handler = new CommandHandler({
-  factorService: new FactorService(new SqliteFactorCacheRepository(database)),
-  exchangeService: new ExchangeService(
-    new FrankfurterProvider(),
-    new SqliteExchangeCacheRepository(database),
-  ),
+  factorService: new FactorService(),
+  exchangeService: new ExchangeService(new FrankfurterProvider()),
   dictionary: new StdictProvider(config.stdictApiKey),
-  pythonRunner: new DockerPythonRunner(config.pythonRunnerImage),
-  pythonEnabled: config.enablePythonRunner,
   squareGames,
 });
 
@@ -45,10 +35,9 @@ let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`${signal} 수신: 게임과 데이터베이스를 정리합니다.`);
+  console.log(`${signal} 수신: 진행 중 게임과 메모리 상태를 정리합니다.`);
   await squareGames.shutdown();
   await client.destroy();
-  database.close();
 }
 
 process.once('SIGINT', () => void shutdown('SIGINT'));

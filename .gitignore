@@ -4,10 +4,6 @@ coverage/
 .env
 .env.*
 !.env.example
-data/
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
 npm-debug.log*
 .DS_Store
 .idea/
