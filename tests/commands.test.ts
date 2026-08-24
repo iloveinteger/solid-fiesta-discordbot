@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction } from 'discord.js';
+import type { ButtonInteraction, ChatInputCommandInteraction } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
 import { CommandHandler, type CommandDependencies } from '../src/commands/command-handler.js';
 import { commandData } from '../src/commands/definitions.js';
@@ -25,5 +25,32 @@ describe('슬래시 명령 정의', () => {
     await handler.handleCommand(interaction);
 
     expect(launchActivity).toHaveBeenCalledOnce();
+  });
+
+  it('사전 상세 버튼은 원본 검색 메시지를 공개 상세 결과로 교체한다', async () => {
+    const deferUpdate = vi.fn().mockResolvedValue(undefined);
+    const editReply = vi.fn().mockResolvedValue(undefined);
+    const interaction = {
+      customId: 'dict:detail:123',
+      deferUpdate,
+      editReply,
+    } as unknown as ButtonInteraction;
+    const dependencies = {
+      squareGames: { ownsButton: vi.fn(() => false) },
+      binaryGames: { ownsButton: vi.fn(() => false) },
+      dictionary: {
+        detail: vi.fn().mockResolvedValue({
+          word: '눈',
+          pronunciation: ['눈'],
+          origins: [],
+          senses: [{ partOfSpeech: '명사', definition: '보는 기관.', examples: [] }],
+        }),
+      },
+    } as unknown as CommandDependencies;
+
+    await new CommandHandler(dependencies).handleButton(interaction);
+
+    expect(deferUpdate).toHaveBeenCalledOnce();
+    expect(editReply).toHaveBeenCalledWith(expect.objectContaining({ components: [] }));
   });
 });

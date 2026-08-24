@@ -161,7 +161,7 @@ export class CommandHandler {
 
   private async dictionaryDetail(interaction: ButtonInteraction): Promise<void> {
     const targetCode = interaction.customId.slice('dict:detail:'.length);
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferUpdate();
     const detail = await this.dependencies.dictionary.detail(targetCode);
     const descriptions = detail.senses.slice(0, 8).map((sense, index) => {
       const examples = sense.examples.length ? `\n예: ${sense.examples.join(' / ')}` : '';
@@ -179,6 +179,7 @@ export class CommandHandler {
             truncate([...metadata, ...descriptions].join('\n\n') || '상세 정보가 없습니다.', 4_000),
           ),
       ],
+      components: [],
     });
   }
 
