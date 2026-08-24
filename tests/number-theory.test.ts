@@ -37,8 +37,9 @@ describe('소인수분해', () => {
 
   it('1 및 입력 제한을 명확히 처리한다', () => {
     expect(formatFactors(1n, factorize(1n))).toBe('1');
+    expect(parseNaturalNumber('000120')).toBe(120n);
     expect(() => parseNaturalNumber('0')).toThrow('자연수');
-    expect(() => parseNaturalNumber('1'.repeat(81))).toThrow('최대 80자리');
+    expect(() => parseNaturalNumber(`000${'1'.repeat(81)}`)).toThrow('최대 80자리');
     expect(() => parseNaturalNumber('12.3')).toThrow('10진수');
   });
 });

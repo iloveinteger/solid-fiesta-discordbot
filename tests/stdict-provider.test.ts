@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   parseDetailResponse,
+  parseDetailXmlResponse,
   parseSearchResponse,
   StdictProvider,
   validateQuery,
@@ -85,6 +86,27 @@ describe('표준국어대사전 응답 파싱', () => {
     });
   });
 
+  it('공식 XML 상세 응답에서 형제 pos_info를 파싱한다', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <xml><channel><item><target_code>123</target_code><word_info>
+        <word>눈</word><pronunciation_info><pronunciation>눈</pronunciation></pronunciation_info>
+      </word_info><pos_info><pos>명사</pos><comm_pattern_info><sense_info>
+        <definition>빛을 감지하는 기관.</definition>
+        <example_info><example>눈을 뜨다.</example></example_info>
+      </sense_info></comm_pattern_info></pos_info></item></channel></xml>`;
+    expect(parseDetailXmlResponse(xml, '123')).toMatchObject({
+      word: '눈',
+      pronunciation: ['눈'],
+      senses: [
+        {
+          partOfSpeech: '명사',
+          definition: '빛을 감지하는 기관.',
+          examples: ['눈을 뜨다.'],
+        },
+      ],
+    });
+  });
+
   it('입력과 API 오류를 검증한다', async () => {
     expect(() => validateQuery('')).toThrow('1~50자');
     expect(() => validateQuery('가\u0000나')).toThrow('제어 문자');
@@ -104,22 +126,13 @@ describe('표준국어대사전 응답 파싱', () => {
   });
 
   it('상세 API에 공식 target_code 방식을 전송한다', async () => {
-    const detailFixture = {
-      channel: {
-        item: {
-          word_info: {
-            word: '눈',
-            pos_info: {
-              pos: '명사',
-              comm_pattern_info: { sense_info: { definition: '보는 기관.' } },
-            },
-          },
-        },
-      },
-    };
+    const detailFixture = `<xml><channel><item><word_info><word>눈</word></word_info>
+      <pos_info><pos>명사</pos><comm_pattern_info><sense_info>
+      <definition>보는 기관.</definition></sense_info></comm_pattern_info></pos_info>
+      </item></channel></xml>`;
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValue(new Response(JSON.stringify(detailFixture), { status: 200 }));
+      .mockResolvedValue(new Response(detailFixture, { status: 200 }));
     const provider = new StdictProvider('secret', fetcher);
 
     await expect(provider.detail('123')).resolves.toMatchObject({ word: '눈' });
@@ -130,5 +143,6 @@ describe('표준국어대사전 응답 파싱', () => {
     expect(options?.body).toBeInstanceOf(URLSearchParams);
     expect((options?.body as URLSearchParams).get('method')).toBe('target_code');
     expect((options?.body as URLSearchParams).get('q')).toBe('123');
+    expect((options?.body as URLSearchParams).get('req_type')).toBe('xml');
   });
 });

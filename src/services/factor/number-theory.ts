@@ -160,9 +160,11 @@ export function formatFactors(input: bigint, factors: readonly bigint[]): string
 
 export function parseNaturalNumber(raw: string, maximumDigits = 80): bigint {
   const normalized = raw.trim();
-  if (!/^[1-9]\d*$/.test(normalized)) throw new Error('1 이상의 10진수 자연수를 입력해 주세요.');
-  if (normalized.length > maximumDigits) {
+  if (!/^\d+$/.test(normalized)) throw new Error('1 이상의 10진수 자연수를 입력해 주세요.');
+  const withoutLeadingZeros = normalized.replace(/^0+/, '');
+  if (!withoutLeadingZeros) throw new Error('1 이상의 10진수 자연수를 입력해 주세요.');
+  if (withoutLeadingZeros.length > maximumDigits) {
     throw new Error(`입력은 최대 ${maximumDigits}자리까지 계산할 수 있습니다.`);
   }
-  return BigInt(normalized);
+  return BigInt(withoutLeadingZeros);
 }

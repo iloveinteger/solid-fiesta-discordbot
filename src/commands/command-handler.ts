@@ -10,7 +10,7 @@ import {
 import type { StdictProvider } from '../providers/stdict-provider.js';
 import type { ExchangeService } from '../services/exchange-service.js';
 import type { FactorService } from '../services/factor/factor-service.js';
-import { DICE_EMOJI, rollDice } from '../services/dice.js';
+import { rollDice } from '../services/dice.js';
 import type { SquareGameManager } from '../services/square-game-manager.js';
 import { errorMessage, truncate } from '../utils/errors.js';
 
@@ -69,7 +69,7 @@ export class CommandHandler {
       embeds: [
         new EmbedBuilder()
           .setTitle('소인수분해')
-          .setDescription(`**${result.input} = ${result.formatted}**`),
+          .setDescription(`${result.input} = ${result.formatted}`),
       ],
     });
   }
@@ -94,7 +94,7 @@ export class CommandHandler {
   private async dice(interaction: ChatInputCommandInteraction): Promise<void> {
     const value = rollDice();
     await interaction.reply({
-      embeds: [new EmbedBuilder().setTitle(`${DICE_EMOJI[value]}  ${value}`)],
+      embeds: [new EmbedBuilder().setTitle(`🎲 주사위: ${value}`)],
     });
   }
 
