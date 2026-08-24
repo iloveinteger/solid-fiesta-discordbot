@@ -147,6 +147,28 @@ journalctl -u discord-utility-bot.service -f
 - `/binary`: `00000`~`11111` 중 하나를 균등하게 뽑습니다. 시작한 사용자의 5자리 이진수 추측마다 일치하지 않는 자릿수 개수와 누적 기록을 표시합니다. `/square`와 같은 채널에서 동시에 진행할 수 없습니다.
 - `/factole`: Discord 안에서 퍼즐을 판정하거나 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) 플레이 화면으로 연결합니다.
 
+## Factole Discord Activity
+
+Developer Portal에서 Activities를 활성화하면 Discord가 기본 전역 Entry Point를 생성합니다. 이 저장소의 `npm run register`는 이후 슬래시 명령을 갱신할 때 해당 Entry Point를 보존합니다. Activities를 활성화하고 URL Mapping을 설정한 다음 서버에서 다음 명령을 한 번 실행하면 Entry Point 이름이 `factole`로 변경됩니다.
+
+**Activities > URL Mappings**에는 아래 순서로 입력합니다. Target에는 `https://`를 붙이지 않으며 `/` 매핑은 반드시 마지막에 둡니다.
+
+| Prefix         | Target                                      |
+| -------------- | ------------------------------------------- |
+| `/discord-sdk` | `unpkg.com/@discord/embedded-app-sdk@2.5.0` |
+| `/react-dom`   | `unpkg.com/react-dom@18/umd`                |
+| `/react`       | `unpkg.com/react@18/umd`                    |
+| `/babel`       | `unpkg.com/@babel/standalone`               |
+| `/tailwind`    | `cdn.tailwindcss.com`                       |
+| `/`            | `ilovefloat.github.io/factole`              |
+
+```bash
+cd /home/ubuntu/discord-utility-bot
+npm run register:activity
+```
+
+Activity가 활성화되기 전에는 이 명령이 아무것도 생성하지 않고 명확한 오류로 종료됩니다. `/factole` 링크 명령은 Activity 설정과 무관하게 계속 사용할 수 있습니다.
+
 ## 저장소 구조
 
 ```text
