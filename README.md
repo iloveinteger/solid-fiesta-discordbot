@@ -145,7 +145,7 @@ journalctl -u discord-utility-bot.service -f
 - `/dict`: 국립국어원 표준국어대사전 Open API를 사용하며 입력과 응답을 검증합니다. 상세 버튼을 누르면 검색 결과 메시지가 선택한 뜻의 공개 상세 정보로 교체됩니다.
 - `/square`: 채널마다 게임 하나만 허용하고 사회자 모드는 최대 20명이 참가합니다.
 - `/binary`: `00000`~`11111` 중 하나를 균등하게 뽑습니다. 시작한 사용자의 5자리 이진수 추측마다 일치하지 않는 자릿수 개수와 누적 기록을 표시합니다. `/square`와 같은 채널에서 동시에 진행할 수 없습니다.
-- `/factole`: 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) Activity를 Discord 안에서 실행합니다. 종료 화면은 정답을 숨긴 색상 격자를 표시하며, 모바일 공유 또는 Discord 채널에 붙여넣을 결과 복사를 지원합니다.
+- `/factole`: 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) Activity를 Discord 안에서 실행합니다.
 
 ## Factole Discord Activity
 
