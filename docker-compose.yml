@@ -1,0 +1,29 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /app/data/bot.sqlite
+      PYTHON_RUNNER_IMAGE: solid-fiesta-python-runner:latest
+    volumes:
+      - bot-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - '${DOCKER_GID:-999}'
+    depends_on:
+      python-runner-image:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+
+  python-runner-image:
+    image: solid-fiesta-python-runner:latest
+    build:
+      context: ./runner
+    command: []
+    restart: 'no'
+
+volumes:
+  bot-data:

@@ -1,0 +1,33 @@
+{
+  "name": "solid-fiesta-discordbot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "개인 및 소규모 서버를 위한 Discord 유틸리티 봇",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node --enable-source-maps dist/index.js",
+    "dev": "npm run build && node --watch --enable-source-maps dist/src/index.js",
+    "register": "npm run build && node dist/src/register-commands.js",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "discord.js": "14.27.0",
+    "dotenv": "17.4.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "10.9.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.11"
+  }
+}
