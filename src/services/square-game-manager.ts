@@ -105,6 +105,10 @@ function content(game: SquareGame): string {
 export class SquareGameManager {
   readonly #games = new Map<string, SquareGame>();
 
+  public hasGame(channelId: string): boolean {
+    return this.#games.has(channelId);
+  }
+
   public async start(interaction: ChatInputCommandInteraction): Promise<void> {
     const channelId = interaction.channelId;
     if (!channelId) {

@@ -8,6 +8,7 @@ import {
   MessageFlags,
 } from 'discord.js';
 import type { StdictProvider } from '../providers/stdict-provider.js';
+import type { BinaryQuizManager } from '../services/binary-quiz-manager.js';
 import type { ExchangeService } from '../services/exchange-service.js';
 import type { FactorService } from '../services/factor/factor-service.js';
 import { rollDice } from '../services/dice.js';
@@ -19,6 +20,7 @@ export interface CommandDependencies {
   exchangeService: ExchangeService;
   dictionary: StdictProvider;
   squareGames: SquareGameManager;
+  binaryGames: BinaryQuizManager;
 }
 
 export class CommandHandler {
@@ -28,7 +30,24 @@ export class CommandHandler {
     try {
       switch (interaction.commandName) {
         case 'square':
-          await this.dependencies.squareGames.start(interaction);
+          if (this.dependencies.binaryGames.hasGame(interaction.channelId)) {
+            await interaction.reply({
+              content: '이 채널에서는 이미 이진수 퀴즈가 진행 중입니다.',
+              flags: MessageFlags.Ephemeral,
+            });
+          } else {
+            await this.dependencies.squareGames.start(interaction);
+          }
+          break;
+        case 'binary':
+          if (this.dependencies.squareGames.hasGame(interaction.channelId)) {
+            await interaction.reply({
+              content: '이 채널에서는 이미 제곱수놀이가 진행 중입니다.',
+              flags: MessageFlags.Ephemeral,
+            });
+          } else {
+            await this.dependencies.binaryGames.start(interaction);
+          }
           break;
         case 'factor':
           await this.factor(interaction);
@@ -38,6 +57,9 @@ export class CommandHandler {
           break;
         case 'dice':
           await this.dice(interaction);
+          break;
+        case 'factole':
+          await this.factole(interaction);
           break;
         case 'dict':
           await this.dictionary(interaction);
@@ -52,6 +74,8 @@ export class CommandHandler {
     try {
       if (this.dependencies.squareGames.ownsButton(interaction.customId)) {
         await this.dependencies.squareGames.handleButton(interaction);
+      } else if (this.dependencies.binaryGames.ownsButton(interaction.customId)) {
+        await this.dependencies.binaryGames.handleButton(interaction);
       } else if (interaction.customId.startsWith('dict:detail:')) {
         await this.dictionaryDetail(interaction);
       }
@@ -95,6 +119,23 @@ export class CommandHandler {
     const value = rollDice();
     await interaction.reply({
       embeds: [new EmbedBuilder().setTitle(`🎲 주사위: ${value}`)],
+    });
+  }
+
+  private async factole(interaction: ChatInputCommandInteraction): Promise<void> {
+    const url = 'https://ilovefloat.github.io/factole/';
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle('Factole')
+          .setURL(url)
+          .setDescription('워들과 비슷한 퍼즐입니다. 아래 버튼을 눌러 웹사이트에서 플레이하세요.'),
+      ],
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder().setLabel('Factole 플레이').setStyle(ButtonStyle.Link).setURL(url),
+        ),
+      ],
     });
   }
 

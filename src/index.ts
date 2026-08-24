@@ -3,6 +3,7 @@ import { CommandHandler } from './commands/command-handler.js';
 import { loadConfig } from './config.js';
 import { FrankfurterProvider } from './providers/exchange-provider.js';
 import { StdictProvider } from './providers/stdict-provider.js';
+import { BinaryQuizManager } from './services/binary-quiz-manager.js';
 import { ExchangeService } from './services/exchange-service.js';
 import { FactorService } from './services/factor/factor-service.js';
 import { SquareGameManager } from './services/square-game-manager.js';
@@ -16,15 +17,17 @@ const client = new Client({
   ],
 });
 const squareGames = new SquareGameManager();
+const binaryGames = new BinaryQuizManager();
 const handler = new CommandHandler({
   factorService: new FactorService(),
   exchangeService: new ExchangeService(new FrankfurterProvider()),
   dictionary: new StdictProvider(config.stdictApiKey),
   squareGames,
+  binaryGames,
 });
 
 client.once(Events.ClientReady, (readyClient) => {
-  console.log(`${readyClient.user.tag} 로그인 완료 (일반 메시지 내용 인텐트 미사용)`);
+  console.log(`${readyClient.user.tag} 로그인 완료 (게임 채널의 숫자 메시지만 처리)`);
 });
 
 client.on(Events.InteractionCreate, (interaction) => {
@@ -35,9 +38,9 @@ client.on(Events.InteractionCreate, (interaction) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
-  void squareGames
-    .handleMessage(message)
-    .catch((error: unknown) => console.error('제곱수놀이 메시지 처리 실패:', error));
+  void Promise.all([squareGames.handleMessage(message), binaryGames.handleMessage(message)]).catch(
+    (error: unknown) => console.error('게임 메시지 처리 실패:', error),
+  );
 });
 
 let shuttingDown = false;
@@ -45,7 +48,7 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`${signal} 수신: 진행 중 게임과 메모리 상태를 정리합니다.`);
-  await squareGames.shutdown();
+  await Promise.all([squareGames.shutdown(), binaryGames.shutdown()]);
   await client.destroy();
 }
 

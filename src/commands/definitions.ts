@@ -28,6 +28,12 @@ export const commandBuilders = [
   new SlashCommandBuilder().setName('exchange').setDescription('원화 기준 주요 환율을 조회합니다'),
   new SlashCommandBuilder().setName('dice').setDescription('공정한 6면체 주사위를 굴립니다'),
   new SlashCommandBuilder()
+    .setName('binary')
+    .setDescription('랜덤한 5자리 이진수를 해밍 거리로 맞힙니다'),
+  new SlashCommandBuilder()
+    .setName('factole')
+    .setDescription('워들형 퍼즐 Factole 플레이 페이지를 엽니다'),
+  new SlashCommandBuilder()
     .setName('dict')
     .setDescription('표준국어대사전에서 단어를 찾습니다')
     .addStringOption((option) =>
