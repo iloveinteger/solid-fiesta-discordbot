@@ -12,7 +12,6 @@
     "build": "npm run clean && tsc -p tsconfig.json",
     "start": "node --enable-source-maps dist/index.js",
     "register": "node dist/register-commands.js",
-    "register:activity": "node dist/register-activity.js",
     "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write .",

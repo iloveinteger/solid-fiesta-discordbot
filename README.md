@@ -12,7 +12,7 @@
 | `/exchange`                  | USD/KRW, JPY/KRW와 출처·기준일·조회 시각을 표시합니다.                      |
 | `/dice`                      | `crypto.randomInt(1, 7)`로 6면체 주사위를 굴립니다.                         |
 | `/binary`                    | 랜덤한 5자리 이진수를 추측하고 해밍 거리와 시도 기록을 확인합니다.          |
-| `/factole`                   | 워들형 퍼즐 Factole을 웹사이트에서 플레이할 수 있는 링크를 표시합니다.      |
+| `/factole`                   | 워들형 퍼즐 Factole을 Discord Activity로 실행합니다.                        |
 | `/dict word:<검색어>`        | 표준국어대사전 동음이의어를 최대 10개 찾고 버튼으로 상세 정보를 표시합니다. |
 
 게임과 모든 캐시는 프로세스 메모리에만 존재합니다. 소인수분해 성공 결과는 실행 중 메모리에 캐시하며, 환율은 10분, 사전 검색은 3분, 사전 상세는 5분 캐시합니다. 재시작하면 캐시가 비워지고 진행 중 게임은 종료됩니다. 정상적인 `SIGTERM`/`SIGINT` 종료에서는 진행 중 게임 메시지를 종료 상태로 바꾸고 타이머를 정리하며, 비정상 종료 뒤 남은 버튼은 재시작 후 만료된 것으로 안내됩니다.
@@ -145,11 +145,11 @@ journalctl -u discord-utility-bot.service -f
 - `/dict`: 국립국어원 표준국어대사전 Open API를 사용하며 입력과 응답을 검증합니다.
 - `/square`: 채널마다 게임 하나만 허용하고 사회자 모드는 최대 20명이 참가합니다.
 - `/binary`: `00000`~`11111` 중 하나를 균등하게 뽑습니다. 시작한 사용자의 5자리 이진수 추측마다 일치하지 않는 자릿수 개수와 누적 기록을 표시합니다. `/square`와 같은 채널에서 동시에 진행할 수 없습니다.
-- `/factole`: Discord 안에서 퍼즐을 판정하거나 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) 플레이 화면으로 연결합니다.
+- `/factole`: 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) Activity를 Discord 안에서 실행합니다.
 
 ## Factole Discord Activity
 
-Developer Portal에서 Activities를 활성화하면 Discord가 기본 전역 Entry Point를 생성합니다. 이 저장소의 `npm run register`는 이후 슬래시 명령을 갱신할 때 해당 Entry Point를 보존합니다. Activities를 활성화하고 URL Mapping을 설정한 다음 서버에서 다음 명령을 한 번 실행하면 Entry Point 이름이 `factole`로 변경됩니다.
+Developer Portal에서 Activities를 활성화하면 Discord가 App Launcher용 기본 전역 Entry Point인 `Launch`를 생성합니다. 이 저장소의 `npm run register`는 이후 슬래시 명령을 갱신할 때 해당 Entry Point를 보존합니다. `/factole`은 `LAUNCH_ACTIVITY` 응답으로 같은 Activity를 직접 실행합니다.
 
 **Activities > URL Mappings**에는 아래 순서로 입력합니다. Target에는 `https://`를 붙이지 않으며 `/` 매핑은 반드시 마지막에 둡니다.
 
@@ -162,12 +162,7 @@ Developer Portal에서 Activities를 활성화하면 Discord가 기본 전역 En
 | `/tailwind`    | `cdn.tailwindcss.com`                       |
 | `/`            | `ilovefloat.github.io/factole`              |
 
-```bash
-cd /home/ubuntu/discord-utility-bot
-npm run register:activity
-```
-
-Activity가 활성화되기 전에는 이 명령이 아무것도 생성하지 않고 명확한 오류로 종료됩니다. `/factole` 링크 명령은 Activity 설정과 무관하게 계속 사용할 수 있습니다.
+Discord는 슬래시 명령과 Entry Point에 같은 `factole` 이름을 허용하지 않으므로 Entry Point는 기본 `Launch` 이름으로 유지합니다. Activity가 비활성화되어 있거나 URL Mapping이 잘못되면 `/factole` 실행 요청은 오류로 안내됩니다.
 
 ## 저장소 구조
 

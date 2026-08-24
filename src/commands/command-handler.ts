@@ -123,20 +123,7 @@ export class CommandHandler {
   }
 
   private async factole(interaction: ChatInputCommandInteraction): Promise<void> {
-    const url = 'https://ilovefloat.github.io/factole/';
-    await interaction.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('Factole')
-          .setURL(url)
-          .setDescription('워들과 비슷한 퍼즐입니다. 아래 버튼을 눌러 웹사이트에서 플레이하세요.'),
-      ],
-      components: [
-        new ActionRowBuilder<ButtonBuilder>().addComponents(
-          new ButtonBuilder().setLabel('Factole 플레이').setStyle(ButtonStyle.Link).setURL(url),
-        ),
-      ],
-    });
+    await interaction.launchActivity();
   }
 
   private async dictionary(interaction: ChatInputCommandInteraction): Promise<void> {

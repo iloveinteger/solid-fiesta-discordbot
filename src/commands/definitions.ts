@@ -32,7 +32,7 @@ export const commandBuilders = [
     .setDescription('랜덤한 5자리 이진수를 해밍 거리로 맞힙니다'),
   new SlashCommandBuilder()
     .setName('factole')
-    .setDescription('워들형 퍼즐 Factole 플레이 페이지를 엽니다'),
+    .setDescription('워들형 퍼즐 Factole Activity를 실행합니다'),
   new SlashCommandBuilder()
     .setName('dict')
     .setDescription('표준국어대사전에서 단어를 찾습니다')
