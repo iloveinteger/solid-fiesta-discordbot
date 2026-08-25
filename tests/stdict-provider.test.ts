@@ -150,6 +150,22 @@ describe('표준국어대사전 응답 파싱', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('검색 API의 빈 성공 응답을 검색 결과 없음으로 처리한다', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 200 }));
+    const provider = new StdictProvider('secret', fetcher);
+
+    await expect(provider.search('없는단어')).resolves.toEqual([]);
+  });
+
+  it('비어 있지 않은 잘못된 JSON 응답은 오류로 처리한다', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('not-json', { status: 200 }));
+    const provider = new StdictProvider('secret', fetcher);
+
+    await expect(provider.search('검색어')).rejects.toThrow('올바르지 않은 응답');
+  });
+
   it('상세 API에 공식 target_code 방식을 전송한다', async () => {
     const detailFixture = `<xml><channel><item><word_info><word>눈</word></word_info>
       <pos_info><pos>명사</pos><comm_pattern_info><sense_info>

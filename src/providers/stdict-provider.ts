@@ -218,8 +218,10 @@ export class StdictProvider {
     parameters: Record<string, string>,
   ): Promise<unknown> {
     const response = await this.send(endpoint, parameters, 'application/json');
+    const body = await response.text();
+    if (!body.trim()) return { channel: { item: [] } };
     try {
-      return (await response.json()) as unknown;
+      return JSON.parse(body) as unknown;
     } catch {
       throw new Error('표준국어대사전 API가 올바르지 않은 응답을 반환했습니다.');
     }

@@ -71,6 +71,6 @@ describe('슬래시 명령 정의', () => {
 
     expect(deferReply).toHaveBeenCalledOnce();
     expect(search).toHaveBeenCalledWith('없는단어');
-    expect(editReply).toHaveBeenCalledWith('표준국어대사전 검색 결과가 없습니다.');
+    expect(editReply).toHaveBeenCalledWith('표준국어대사전에서 일치하는 결과를 찾지 못했습니다.');
   });
 });

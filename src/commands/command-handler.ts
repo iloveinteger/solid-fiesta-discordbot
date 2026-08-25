@@ -144,7 +144,7 @@ export class CommandHandler {
       interaction.options.getString('word', true),
     );
     if (results.length === 0) {
-      await interaction.editReply('표준국어대사전 검색 결과가 없습니다.');
+      await interaction.editReply('표준국어대사전에서 일치하는 결과를 찾지 못했습니다.');
       return;
     }
     const embed = new EmbedBuilder().setTitle('표준국어대사전 검색 결과');
