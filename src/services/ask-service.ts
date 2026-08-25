@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { ApiError, GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 export const ASK_MAX_QUESTION_LENGTH = 500;
 const ASK_TIMEOUT_MS = 12_000;
@@ -40,16 +40,29 @@ export class AskService {
         config: {
           systemInstruction:
             '질문에 반드시 한국어 한 문장으로만 짧게 답해. 말투는 약간 까칠하고 차갑게, 솔직하게 말해. 마크다운과 줄바꿈을 쓰지 마.',
-          maxOutputTokens: 100,
-          temperature: 0.6,
+          maxOutputTokens: 512,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           httpOptions: { timeout: ASK_TIMEOUT_MS },
         },
       });
       return normalizeAskAnswer(response.text ?? '');
     } catch (error: unknown) {
       if (error instanceof AskNotConfiguredError) throw error;
+      console.warn('Gemini API 요청 실패:', {
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        status: error instanceof ApiError ? error.status : undefined,
+        model: this.model,
+      });
       if (error instanceof Error && error.name === 'TimeoutError') {
         throw new Error('Gemini 응답 시간이 초과되었습니다. 잠시 뒤 다시 시도하세요.', {
+          cause: error,
+        });
+      }
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        throw new Error('Gemini API 키 또는 사용 권한을 확인하세요.', { cause: error });
+      }
+      if (error instanceof ApiError && error.status === 429) {
+        throw new Error('Gemini 요청 한도를 넘었습니다. 잠시 뒤 다시 시도하세요.', {
           cause: error,
         });
       }

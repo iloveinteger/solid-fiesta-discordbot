@@ -2,12 +2,22 @@ import type { ChatInputCommandInteraction, Message } from 'discord.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   classifySquareSubmission,
+  chooseSquareFirstTurn,
   SquareGameManager,
 } from '../src/services/square-game-manager.js';
 
 describe('제곱수놀이 채팅 입력', () => {
   it('숫자가 아닌 일반 채팅은 무시한다', () => {
     expect(classifySquareSubmission('안녕하세요', 9n)).toBe('ignore');
+  });
+
+  it('봇전 선공을 균등한 0~1 난수로 정한다', () => {
+    const userFirst = vi.fn(() => 0);
+    const botFirst = vi.fn(() => 1);
+    expect(chooseSquareFirstTurn(userFirst)).toBe('user');
+    expect(chooseSquareFirstTurn(botFirst)).toBe('bot');
+    expect(userFirst).toHaveBeenCalledWith(0, 2);
+    expect(botFirst).toHaveBeenCalledWith(0, 2);
   });
 
   it('정답과 재도전 가능한 오답을 구분한다', () => {
@@ -24,17 +34,21 @@ describe('제곱수놀이 현황 메시지', () => {
 
   it('동시 상태 변경도 직렬화해 매번 직전 현황 하나만 삭제하고 새로 보낸다', async () => {
     vi.useFakeTimers();
-    const deleted: string[] = [];
+    const events: string[] = [];
     let sequence = 0;
     const makeStatus = (id: string) => ({
       id,
       delete: vi.fn(() => {
-        deleted.push(id);
+        events.push(`delete:${id}`);
         return Promise.resolve();
       }),
     });
     const placeholder = makeStatus('status-0');
-    const send = vi.fn(() => Promise.resolve(makeStatus(`status-${++sequence}`)));
+    const send = vi.fn(() => {
+      const id = `status-${++sequence}`;
+      events.push(`send:${id}`);
+      return Promise.resolve(makeStatus(id));
+    });
     const channel = { isSendable: () => true, send };
     const interaction = {
       channelId: 'channel-1',
@@ -44,7 +58,10 @@ describe('제곱수놀이 현황 메시지', () => {
       deferReply: vi.fn().mockResolvedValue(undefined),
       editReply: vi.fn().mockResolvedValue(placeholder),
     } as unknown as ChatInputCommandInteraction;
-    const manager = new SquareGameManager();
+    const manager = new SquareGameManager(
+      vi.fn(() => 0),
+      0,
+    );
 
     await manager.start(interaction);
     const wrongMessage = (content: string) =>
@@ -60,7 +77,14 @@ describe('제곱수놀이 현황 메시지', () => {
     ]);
 
     expect(send).toHaveBeenCalledTimes(3);
-    expect(deleted).toEqual(['status-0', 'status-1', 'status-2']);
+    expect(events).toEqual([
+      'send:status-1',
+      'delete:status-0',
+      'send:status-2',
+      'delete:status-1',
+      'send:status-3',
+      'delete:status-2',
+    ]);
   });
 
   it('직전 현황 삭제가 실패해도 게임 시작과 새 현황 전송을 유지한다', async () => {
@@ -82,7 +106,10 @@ describe('제곱수놀이 현황 메시지', () => {
       deferReply: vi.fn().mockResolvedValue(undefined),
       editReply: vi.fn().mockResolvedValue(placeholder),
     } as unknown as ChatInputCommandInteraction;
-    const manager = new SquareGameManager();
+    const manager = new SquareGameManager(
+      vi.fn(() => 0),
+      0,
+    );
 
     await expect(manager.start(interaction)).resolves.toBeUndefined();
 

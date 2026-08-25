@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -7,6 +8,7 @@ import {
   Message,
   type SendableChannels,
 } from 'discord.js';
+import type { RandomInt } from './dice.js';
 
 type GameMode = 'bot' | 'referee';
 
@@ -43,6 +45,11 @@ const IDS = {
   begin: 'square:begin',
   cancel: 'square:cancel',
 } as const;
+const STATUS_DELETE_DELAY_MS = 100;
+
+export function chooseSquareFirstTurn(random: RandomInt = randomInt): 'bot' | 'user' {
+  return random(0, 2) === 0 ? 'user' : 'bot';
+}
 
 function mention(userId: string): string {
   return `<@${userId}>`;
@@ -109,6 +116,11 @@ export class SquareGameManager {
   readonly #games = new Map<string, SquareGame>();
   readonly #queues = new Map<string, Promise<void>>();
 
+  public constructor(
+    private readonly random: RandomInt = randomInt,
+    private readonly statusDeleteDelayMs = STATUS_DELETE_DELAY_MS,
+  ) {}
+
   public hasGame(channelId: string): boolean {
     return this.#games.has(channelId);
   }
@@ -147,12 +159,15 @@ export class SquareGameManager {
               ...base,
               mode,
               userId: interaction.user.id,
-              turn: 'user',
+              turn: chooseSquareFirstTurn(this.random),
             }
           : { ...base, mode, phase: 'lobby', participants: [interaction.user.id], turnIndex: 0 };
       this.#games.set(channelId, game);
       await this.render(game);
-      if (game.mode === 'bot') this.scheduleTimeout(game);
+      if (game.mode === 'bot') {
+        if (game.turn === 'bot') this.scheduleBot(game);
+        else this.scheduleTimeout(game);
+      }
     });
   }
 
@@ -357,11 +372,6 @@ export class SquareGameManager {
 
   private async render(game: SquareGame, notice?: string, finished = false): Promise<void> {
     const previousMessage = game.statusMessage;
-    try {
-      await previousMessage.delete();
-    } catch (error: unknown) {
-      console.warn('이전 제곱수게임 현황 메시지를 삭제하지 못했습니다:', errorMessageForLog(error));
-    }
     const nextMessage = await game.channel.send({
       content: `${content(game)}${notice ? `\n\n${notice}` : ''}`,
       components: finished ? [] : rows(game),
@@ -369,6 +379,14 @@ export class SquareGameManager {
     });
     game.statusMessage = nextMessage;
     game.statusMessageId = nextMessage.id;
+    if (this.statusDeleteDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.statusDeleteDelayMs));
+    }
+    try {
+      await previousMessage.delete();
+    } catch (error: unknown) {
+      console.warn('이전 제곱수게임 현황 메시지를 삭제하지 못했습니다:', errorMessageForLog(error));
+    }
   }
 
   private async finish(game: SquareGame, result: string): Promise<void> {
