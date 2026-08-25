@@ -39,7 +39,7 @@ export class AskService {
         contents: normalizedQuestion,
         config: {
           systemInstruction:
-            '질문에 반드시 한국어 한 문장으로만 짧게 답하세요. 말투는 약간 까칠하고 차갑게 하되 모욕, 혐오, 위협은 하지 마세요. 마크다운과 줄바꿈을 쓰지 마세요.',
+            '질문에 반드시 한국어 한 문장으로만 짧게 답해. 말투는 약간 까칠하고 차갑게, 솔직하게 말해. 마크다운과 줄바꿈을 쓰지 마.',
           maxOutputTokens: 100,
           temperature: 0.6,
           httpOptions: { timeout: ASK_TIMEOUT_MS },
