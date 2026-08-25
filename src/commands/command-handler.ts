@@ -5,6 +5,7 @@ import {
   ButtonStyle,
   ChatInputCommandInteraction,
   EmbedBuilder,
+  escapeMarkdown,
   MessageFlags,
 } from 'discord.js';
 import type { StdictProvider } from '../providers/stdict-provider.js';
@@ -166,10 +167,12 @@ export class CommandHandler {
 
   private async ask(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply();
-    const answer = await this.dependencies.askService.answer(
-      interaction.options.getString('question', true),
-    );
-    await interaction.editReply(answer);
+    const question = interaction.options.getString('question', true).trim();
+    const answer = await this.dependencies.askService.answer(question);
+    await interaction.editReply({
+      content: `**질문:** ${escapeMarkdown(question)}\n**답변:** ${answer}`,
+      allowedMentions: { parse: [] },
+    });
   }
 
   private async dictionaryDetail(interaction: ButtonInteraction): Promise<void> {

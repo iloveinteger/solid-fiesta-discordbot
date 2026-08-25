@@ -1,8 +1,9 @@
-import { ApiError, GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { ApiError, GoogleGenAI } from '@google/genai';
 
 export const ASK_MAX_QUESTION_LENGTH = 500;
 const ASK_TIMEOUT_MS = 12_000;
 const ASK_MAX_RESPONSE_LENGTH = 300;
+const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
 
 export class AskNotConfiguredError extends Error {
   public constructor() {
@@ -11,14 +12,24 @@ export class AskNotConfiguredError extends Error {
   }
 }
 
+class EmptyGeminiResponseError extends Error {
+  public constructor() {
+    super('Gemini returned an empty response.');
+    this.name = 'EmptyGeminiResponseError';
+  }
+}
+
 export class AskService {
-  readonly #client?: GoogleGenAI;
+  readonly #client?: Pick<GoogleGenAI, 'models'>;
 
   public constructor(
     apiKey: string | undefined,
     private readonly model: string,
+    client?: Pick<GoogleGenAI, 'models'>,
   ) {
-    if (apiKey) {
+    if (client) {
+      this.#client = client;
+    } else if (apiKey) {
       this.#client = new GoogleGenAI({
         apiKey,
         httpOptions: { timeout: ASK_TIMEOUT_MS },
@@ -28,49 +39,84 @@ export class AskService {
 
   public async answer(question: string): Promise<string> {
     if (!this.#client) throw new AskNotConfiguredError();
+    const client = this.#client;
     const normalizedQuestion = question.trim();
     if (!normalizedQuestion || normalizedQuestion.length > ASK_MAX_QUESTION_LENGTH) {
       throw new Error(`질문은 1자 이상 ${ASK_MAX_QUESTION_LENGTH}자 이하로 입력하세요.`);
     }
+    const abortSignal = AbortSignal.timeout(ASK_TIMEOUT_MS);
 
-    try {
-      const response = await this.#client.models.generateContent({
-        model: this.model,
+    const generate = async (model: string): Promise<string> => {
+      const response = await client.models.generateContent({
+        model,
         contents: normalizedQuestion,
         config: {
           systemInstruction:
             '질문에 반드시 한국어 한 문장으로만 짧게 답해. 말투는 약간 까칠하고 차갑게, 솔직하게 말해. 마크다운과 줄바꿈을 쓰지 마.',
           maxOutputTokens: 512,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          abortSignal,
           httpOptions: { timeout: ASK_TIMEOUT_MS },
         },
       });
-      return normalizeAskAnswer(response.text ?? '');
+      if (!response.text?.trim()) throw new EmptyGeminiResponseError();
+      return normalizeAskAnswer(response.text);
+    };
+
+    try {
+      return await generate(this.model);
     } catch (error: unknown) {
       if (error instanceof AskNotConfiguredError) throw error;
-      console.warn('Gemini API 요청 실패:', {
-        errorName: error instanceof Error ? error.name : 'UnknownError',
-        status: error instanceof ApiError ? error.status : undefined,
-        model: this.model,
-      });
-      if (error instanceof Error && error.name === 'TimeoutError') {
-        throw new Error('Gemini 응답 시간이 초과되었습니다. 잠시 뒤 다시 시도하세요.', {
-          cause: error,
-        });
+      logGeminiFailure(error, this.model);
+      const shouldFallback =
+        this.model !== GEMINI_FALLBACK_MODEL &&
+        ((error instanceof ApiError && (error.status === 400 || error.status === 404)) ||
+          error instanceof EmptyGeminiResponseError);
+      if (shouldFallback) {
+        try {
+          return await generate(GEMINI_FALLBACK_MODEL);
+        } catch (fallbackError: unknown) {
+          logGeminiFailure(fallbackError, GEMINI_FALLBACK_MODEL);
+          throw userFacingGeminiError(fallbackError);
+        }
       }
-      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-        throw new Error('Gemini API 키 또는 사용 권한을 확인하세요.', { cause: error });
-      }
-      if (error instanceof ApiError && error.status === 429) {
-        throw new Error('Gemini 요청 한도를 넘었습니다. 잠시 뒤 다시 시도하세요.', {
-          cause: error,
-        });
-      }
-      throw new Error('Gemini가 지금은 답하지 못합니다. 잠시 뒤 다시 시도하세요.', {
-        cause: error,
-      });
+      throw userFacingGeminiError(error);
     }
   }
+}
+
+function userFacingGeminiError(error: unknown): Error {
+  if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+    return new Error('Gemini 응답 시간이 초과되었습니다. 잠시 뒤 다시 시도하세요.', {
+      cause: error,
+    });
+  }
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+    return new Error(`Gemini API 키 또는 사용 권한을 확인하세요 (HTTP ${error.status}).`, {
+      cause: error,
+    });
+  }
+  if (error instanceof ApiError && error.status === 429) {
+    return new Error('Gemini 요청 한도를 넘었습니다 (HTTP 429). 잠시 뒤 다시 시도하세요.', {
+      cause: error,
+    });
+  }
+  if (error instanceof ApiError) {
+    return new Error(`Gemini 요청에 실패했습니다 (HTTP ${error.status}).`, { cause: error });
+  }
+  if (error instanceof EmptyGeminiResponseError) {
+    return new Error('Gemini가 빈 답변을 반환했습니다. 잠시 뒤 다시 시도하세요.', {
+      cause: error,
+    });
+  }
+  return new Error('Gemini 연결에 실패했습니다. 잠시 뒤 다시 시도하세요.', { cause: error });
+}
+
+function logGeminiFailure(error: unknown, model: string): void {
+  console.warn('Gemini API 요청 실패:', {
+    errorName: error instanceof Error ? error.name : 'UnknownError',
+    status: error instanceof ApiError ? error.status : undefined,
+    model,
+  });
 }
 
 export function normalizeAskAnswer(raw: string): string {
