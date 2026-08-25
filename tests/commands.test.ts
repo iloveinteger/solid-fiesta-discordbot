@@ -53,4 +53,24 @@ describe('슬래시 명령 정의', () => {
     expect(deferUpdate).toHaveBeenCalledOnce();
     expect(editReply).toHaveBeenCalledWith(expect.objectContaining({ components: [] }));
   });
+
+  it('표준국어대사전에 검색 결과가 없으면 빈 결과를 안내한다', async () => {
+    const deferReply = vi.fn().mockResolvedValue(undefined);
+    const editReply = vi.fn().mockResolvedValue(undefined);
+    const search = vi.fn().mockResolvedValue([]);
+    const interaction = {
+      commandName: 'dict',
+      options: { getString: vi.fn(() => '없는단어') },
+      deferReply,
+      editReply,
+    } as unknown as ChatInputCommandInteraction;
+
+    await new CommandHandler({
+      dictionary: { search },
+    } as unknown as CommandDependencies).handleCommand(interaction);
+
+    expect(deferReply).toHaveBeenCalledOnce();
+    expect(search).toHaveBeenCalledWith('없는단어');
+    expect(editReply).toHaveBeenCalledWith('표준국어대사전 검색 결과가 없습니다.');
+  });
 });
