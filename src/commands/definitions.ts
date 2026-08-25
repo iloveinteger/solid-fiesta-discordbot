@@ -1,4 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
+import { ASK_MAX_QUESTION_LENGTH } from '../services/ask-service.js';
 
 export const commandBuilders = [
   new SlashCommandBuilder()
@@ -38,6 +39,16 @@ export const commandBuilders = [
     .setDescription('표준국어대사전에서 단어를 찾습니다')
     .addStringOption((option) =>
       option.setName('word').setDescription('검색할 단어').setRequired(true).setMaxLength(50),
+    ),
+  new SlashCommandBuilder()
+    .setName('ask')
+    .setDescription('Gemini에게 짧게 질문합니다')
+    .addStringOption((option) =>
+      option
+        .setName('question')
+        .setDescription('질문 내용')
+        .setRequired(true)
+        .setMaxLength(ASK_MAX_QUESTION_LENGTH),
     ),
 ];
 

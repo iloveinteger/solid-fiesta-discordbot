@@ -4,6 +4,7 @@ import { loadConfig } from './config.js';
 import { FrankfurterProvider } from './providers/exchange-provider.js';
 import { StdictProvider } from './providers/stdict-provider.js';
 import { BinaryQuizManager } from './services/binary-quiz-manager.js';
+import { AskService } from './services/ask-service.js';
 import { ExchangeService } from './services/exchange-service.js';
 import { FactorService } from './services/factor/factor-service.js';
 import { SquareGameManager } from './services/square-game-manager.js';
@@ -24,6 +25,7 @@ const handler = new CommandHandler({
   dictionary: new StdictProvider(config.stdictApiKey),
   squareGames,
   binaryGames,
+  askService: new AskService(config.geminiApiKey, config.geminiModel),
 });
 
 client.once(Events.ClientReady, (readyClient) => {

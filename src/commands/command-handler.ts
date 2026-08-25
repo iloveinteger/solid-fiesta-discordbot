@@ -9,6 +9,7 @@ import {
 } from 'discord.js';
 import type { StdictProvider } from '../providers/stdict-provider.js';
 import type { BinaryQuizManager } from '../services/binary-quiz-manager.js';
+import type { AskService } from '../services/ask-service.js';
 import type { ExchangeService } from '../services/exchange-service.js';
 import type { FactorService } from '../services/factor/factor-service.js';
 import { rollDice } from '../services/dice.js';
@@ -21,6 +22,7 @@ export interface CommandDependencies {
   dictionary: StdictProvider;
   squareGames: SquareGameManager;
   binaryGames: BinaryQuizManager;
+  askService: AskService;
 }
 
 export class CommandHandler {
@@ -63,6 +65,9 @@ export class CommandHandler {
           break;
         case 'dict':
           await this.dictionary(interaction);
+          break;
+        case 'ask':
+          await this.ask(interaction);
           break;
       }
     } catch (error) {
@@ -157,6 +162,14 @@ export class CommandHandler {
       );
     }
     await interaction.editReply({ embeds: [embed], components: rows });
+  }
+
+  private async ask(interaction: ChatInputCommandInteraction): Promise<void> {
+    await interaction.deferReply();
+    const answer = await this.dependencies.askService.answer(
+      interaction.options.getString('question', true),
+    );
+    await interaction.editReply(answer);
   }
 
   private async dictionaryDetail(interaction: ButtonInteraction): Promise<void> {

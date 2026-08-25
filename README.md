@@ -14,6 +14,7 @@
 | `/binary`                    | 랜덤한 5자리 이진수를 추측하고 해밍 거리와 시도 기록을 확인합니다.      |
 | `/factole`                   | 워들형 퍼즐 Factole을 Discord Activity로 실행합니다.                    |
 | `/dict word:<검색어>`        | 표준국어대사전 결과를 찾고 선택한 상세 정보로 공개 메시지를 교체합니다. |
+| `/ask question:<질문>`       | Gemini가 한국어 한 문장으로 짧고 약간 까칠하게 답합니다.                |
 
 게임과 모든 캐시는 프로세스 메모리에만 존재합니다. 소인수분해 성공 결과는 실행 중 메모리에 캐시하며, 환율은 10분, 사전 검색은 3분, 사전 상세는 5분 캐시합니다. 재시작하면 캐시가 비워지고 진행 중 게임은 종료됩니다. 정상적인 `SIGTERM`/`SIGINT` 종료에서는 진행 중 게임 메시지를 종료 상태로 바꾸고 타이머를 정리하며, 비정상 종료 뒤 남은 버튼은 재시작 후 만료된 것으로 안내됩니다.
 
@@ -23,6 +24,7 @@
 - npm 11 이상
 - Discord 애플리케이션과 Bot Token
 - 표준국어대사전 Open API 키
+- `/ask`를 사용할 경우 Google AI Studio Gemini API 키
 
 별도 데이터베이스나 컨테이너 런타임은 필요하지 않습니다.
 
@@ -35,9 +37,11 @@
 | `DISCORD_BOT_TOKEN`      | 예     | Discord Developer Portal에서 발급한 Bot Token                                      |
 | `DISCORD_APPLICATION_ID` | 예     | Discord 애플리케이션 ID                                                            |
 | `STDICT_API_KEY`         | 예     | 표준국어대사전 Open API 인증 키                                                    |
+| `GEMINI_API_KEY`         | 아니요 | `/ask`에서 사용하는 Google AI Studio API 키. 없으면 `/ask`만 비활성화됩니다.       |
+| `GEMINI_MODEL`           | 아니요 | Gemini 모델 ID. 기본값은 안정 버전 `gemini-3.7-flash`입니다.                       |
 | `DISCORD_GUILD_ID`       | 아니요 | 개발 서버 ID. 설정하면 해당 서버에 명령어를 즉시 등록하고, 없으면 전역 등록합니다. |
 
-표준국어대사전 키는 HTTPS POST 본문으로만 전송하며 요청 URL이나 애플리케이션 로그에 넣지 않습니다. GitHub Actions CI는 외부 서비스에 접속하지 않아 Secret이 필요 없습니다. 향후 배포 workflow를 추가할 경우 저장소의 **Settings > Secrets and variables > Actions**에 비밀값을 등록하고 환경변수로만 전달하세요.
+표준국어대사전 키와 Gemini 키는 애플리케이션 로그에 넣지 않습니다. `/ask`는 질문 원문이나 응답 전문도 로그에 남기지 않습니다. GitHub Actions CI는 외부 서비스에 접속하지 않아 Secret이 필요 없습니다. 배포 서버에서 `/ask`를 사용하려면 서버의 기존 `.env`에 `GEMINI_API_KEY`를 추가하세요.
 
 ## Discord 애플리케이션 설정
 
@@ -144,6 +148,8 @@ journalctl -u discord-utility-bot.service -f
 - `/exchange`: 키가 필요 없는 Frankfurter의 유럽중앙은행 기준환율을 사용합니다. 공급자 장애 시 프로세스가 보유한 마지막 정상값과 그 시각을 표시합니다. 은행 고시환율 및 실제 거래 환율과 다를 수 있습니다.
 - `/dict`: 국립국어원 표준국어대사전 Open API를 사용하며 입력과 응답을 검증합니다. 상세 버튼을 누르면 검색 결과 메시지가 선택한 뜻의 공개 상세 정보로 교체됩니다.
 - `/square`: 채널마다 게임 하나만 허용하고 사회자 모드는 최대 20명이 참가합니다.
+- `/square` 현황은 상태가 바뀔 때마다 새 메시지로 채널 하단에 다시 게시하며, 봇이 저장한 직전 현황 메시지만 삭제합니다.
+- `/ask`: 질문은 최대 500자이며 12초 API 제한 시간을 적용합니다. 응답은 최대 300자의 한국어 한 문장으로 정리합니다.
 - `/binary`: `00000`~`11111` 중 하나를 균등하게 뽑습니다. 시작한 사용자의 5자리 이진수 추측마다 일치하지 않는 자릿수 개수와 누적 기록을 표시합니다. `/square`와 같은 채널에서 동시에 진행할 수 없습니다.
 - `/factole`: 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) Activity를 Discord 안에서 실행합니다.
 

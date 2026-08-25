@@ -5,6 +5,7 @@ import {
   ButtonStyle,
   ChatInputCommandInteraction,
   Message,
+  type SendableChannels,
 } from 'discord.js';
 
 type GameMode = 'bot' | 'referee';
@@ -15,7 +16,9 @@ interface BaseGame {
   mode: GameMode;
   expectedIndex: bigint;
   history: string[];
-  message: Message;
+  channel: SendableChannels;
+  statusMessage: Message;
+  statusMessageId: string;
   timer?: NodeJS.Timeout;
   revision: number;
 }
@@ -104,6 +107,7 @@ function content(game: SquareGame): string {
 
 export class SquareGameManager {
   readonly #games = new Map<string, SquareGame>();
+  readonly #queues = new Map<string, Promise<void>>();
 
   public hasGame(channelId: string): boolean {
     return this.#games.has(channelId);
@@ -111,40 +115,45 @@ export class SquareGameManager {
 
   public async start(interaction: ChatInputCommandInteraction): Promise<void> {
     const channelId = interaction.channelId;
-    if (!channelId) {
+    const channel = interaction.channel;
+    if (!channelId || !channel?.isSendable()) {
       await interaction.reply({ content: '서버 채널에서만 시작할 수 있습니다.', ephemeral: true });
       return;
     }
-    if (this.#games.has(channelId)) {
-      await interaction.reply({
-        content: '이 채널에서는 이미 게임이 진행 중입니다.',
-        ephemeral: true,
-      });
-      return;
-    }
-    const mode = interaction.options.getString('mode', true) as GameMode;
-    await interaction.deferReply();
-    const placeholder = await interaction.editReply('제곱수놀이를 준비하고 있습니다…');
-    const base = {
-      channelId,
-      hostId: interaction.user.id,
-      expectedIndex: 1n,
-      history: [],
-      message: placeholder,
-      revision: 0,
-    };
-    const game: SquareGame =
-      mode === 'bot'
-        ? {
-            ...base,
-            mode,
-            userId: interaction.user.id,
-            turn: 'user',
-          }
-        : { ...base, mode, phase: 'lobby', participants: [interaction.user.id], turnIndex: 0 };
-    this.#games.set(channelId, game);
-    await this.render(game);
-    if (game.mode === 'bot') this.scheduleTimeout(game);
+    await this.serialize(channelId, async () => {
+      if (this.#games.has(channelId)) {
+        await interaction.reply({
+          content: '이 채널에서는 이미 게임이 진행 중입니다.',
+          ephemeral: true,
+        });
+        return;
+      }
+      const mode = interaction.options.getString('mode', true) as GameMode;
+      await interaction.deferReply();
+      const placeholder = await interaction.editReply('제곱수놀이를 준비하고 있습니다…');
+      const base = {
+        channelId,
+        hostId: interaction.user.id,
+        expectedIndex: 1n,
+        history: [],
+        channel,
+        statusMessage: placeholder,
+        statusMessageId: placeholder.id,
+        revision: 0,
+      };
+      const game: SquareGame =
+        mode === 'bot'
+          ? {
+              ...base,
+              mode,
+              userId: interaction.user.id,
+              turn: 'user',
+            }
+          : { ...base, mode, phase: 'lobby', participants: [interaction.user.id], turnIndex: 0 };
+      this.#games.set(channelId, game);
+      await this.render(game);
+      if (game.mode === 'bot') this.scheduleTimeout(game);
+    });
   }
 
   public ownsButton(customId: string): boolean {
@@ -152,77 +161,80 @@ export class SquareGameManager {
   }
 
   public async handleButton(interaction: ButtonInteraction): Promise<void> {
-    const game = this.#games.get(interaction.channelId);
-    if (!game) {
-      await interaction.reply({
-        content: '이 게임은 종료되었거나 봇 재시작으로 정리되었습니다.',
-        ephemeral: true,
-      });
-      return;
-    }
-    switch (interaction.customId) {
-      case IDS.join:
-        await this.join(interaction, game);
+    await this.serialize(interaction.channelId, async () => {
+      const game = this.#games.get(interaction.channelId);
+      if (!game) {
+        await interaction.reply({
+          content: '이 게임은 종료되었거나 봇 재시작으로 정리되었습니다.',
+          ephemeral: true,
+        });
         return;
-      case IDS.begin:
-        await this.begin(interaction, game);
-        return;
-      case IDS.cancel:
-        await this.cancel(interaction, game);
-        return;
-    }
+      }
+      switch (interaction.customId) {
+        case IDS.join:
+          await this.join(interaction, game);
+          return;
+        case IDS.begin:
+          await this.begin(interaction, game);
+          return;
+        case IDS.cancel:
+          await this.cancel(interaction, game);
+          return;
+      }
+    });
   }
 
   public async handleMessage(message: Message): Promise<void> {
     if (message.author.bot || !message.inGuild()) return;
-    const game = this.#games.get(message.channelId);
-    if (!game) return;
-    const currentUser = game.mode === 'bot' ? game.userId : game.participants[game.turnIndex];
-    if (
-      currentUser !== message.author.id ||
-      (game.mode === 'bot' && game.turn !== 'user') ||
-      (game.mode === 'referee' && game.phase !== 'playing')
-    ) {
-      return;
-    }
-    const raw = message.content.trim();
-    const target = expected(game);
-    const submission = classifySquareSubmission(raw, target);
-    if (submission === 'ignore') return;
-    if (submission === 'wrong') {
-      game.history.push(`${mention(message.author.id)}: ${raw.slice(0, 50)} ❌`);
-      await this.render(
-        game,
-        `${mention(message.author.id)}님, 오답입니다. 남은 시간 안에 다시 입력하세요.`,
-      );
-      return;
-    }
-    this.clearTimer(game);
-    game.history.push(`${mention(message.author.id)}: ${target} ✅`);
-    game.expectedIndex += 1n;
-    if (game.mode === 'bot') {
-      game.turn = 'bot';
-      game.revision += 1;
-      await this.render(game);
-      this.scheduleBot(game);
-    } else {
-      this.advanceRefereeTurn(game);
-      await this.render(game);
-      this.scheduleTimeout(game);
-    }
+    await this.serialize(message.channelId, async () => {
+      const game = this.#games.get(message.channelId);
+      if (!game) return;
+      const currentUser = game.mode === 'bot' ? game.userId : game.participants[game.turnIndex];
+      if (
+        currentUser !== message.author.id ||
+        (game.mode === 'bot' && game.turn !== 'user') ||
+        (game.mode === 'referee' && game.phase !== 'playing')
+      ) {
+        return;
+      }
+      const raw = message.content.trim();
+      const target = expected(game);
+      const submission = classifySquareSubmission(raw, target);
+      if (submission === 'ignore') return;
+      if (submission === 'wrong') {
+        game.history.push(`${mention(message.author.id)}: ${raw.slice(0, 50)} ❌`);
+        await this.render(
+          game,
+          `${mention(message.author.id)}님, 오답입니다. 남은 시간 안에 다시 입력하세요.`,
+        );
+        return;
+      }
+      this.clearTimer(game);
+      game.history.push(`${mention(message.author.id)}: ${target} ✅`);
+      game.expectedIndex += 1n;
+      if (game.mode === 'bot') {
+        game.turn = 'bot';
+        game.revision += 1;
+        await this.render(game);
+        this.scheduleBot(game);
+      } else {
+        this.advanceRefereeTurn(game);
+        await this.render(game);
+        this.scheduleTimeout(game);
+      }
+    });
   }
 
   public async shutdown(): Promise<void> {
     const games = [...this.#games.values()];
     this.#games.clear();
     await Promise.allSettled(
-      games.map(async (game) => {
-        this.clearTimer(game);
-        await game.message.edit({
-          content: `${content(game)}\n\n봇 종료로 게임이 정리되었습니다.`,
-          components: [],
-        });
-      }),
+      games.map((game) =>
+        this.serialize(game.channelId, async () => {
+          this.clearTimer(game);
+          await this.render(game, '봇 종료로 게임이 정리되었습니다.', true);
+        }),
+      ),
     );
   }
 
@@ -237,7 +249,8 @@ export class SquareGameManager {
       await interaction.reply({ content: '참가자는 최대 20명입니다.', ephemeral: true });
       return;
     } else game.participants.push(interaction.user.id);
-    await interaction.update({ content: content(game), components: rows(game) });
+    await interaction.deferUpdate();
+    await this.render(game);
   }
 
   private async begin(interaction: ButtonInteraction, game: SquareGame): Promise<void> {
@@ -256,7 +269,8 @@ export class SquareGameManager {
     game.phase = 'playing';
     game.turnIndex = 0;
     game.revision += 1;
-    await interaction.update({ content: content(game), components: rows(game) });
+    await interaction.deferUpdate();
+    await this.render(game);
     this.scheduleTimeout(game);
   }
 
@@ -270,10 +284,8 @@ export class SquareGameManager {
     }
     this.clearTimer(game);
     this.#games.delete(game.channelId);
-    await interaction.update({
-      content: `${content(game)}\n\n게임이 취소되었습니다.`,
-      components: [],
-    });
+    await interaction.deferUpdate();
+    await this.render(game, '게임이 취소되었습니다.', true);
   }
 
   private scheduleBot(game: BotGame): void {
@@ -281,7 +293,7 @@ export class SquareGameManager {
     const revision = game.revision;
     const delay = 700 + Math.floor(Math.random() * 1_101);
     game.timer = setTimeout(() => {
-      void (async () => {
+      void this.serialize(game.channelId, async () => {
         if (this.#games.get(game.channelId) !== game || game.revision !== revision) return;
         const answer = expected(game);
         game.history.push(`🤖 봇: ${answer} ✅`);
@@ -290,7 +302,7 @@ export class SquareGameManager {
         game.revision += 1;
         await this.render(game);
         this.scheduleTimeout(game);
-      })().catch((error: unknown) => this.handleAsyncFailure(game, error));
+      }).catch((error: unknown) => this.handleAsyncFailure(game, error));
     }, delay);
   }
 
@@ -298,7 +310,7 @@ export class SquareGameManager {
     this.clearTimer(game);
     const revision = game.revision;
     game.timer = setTimeout(() => {
-      void (async () => {
+      void this.serialize(game.channelId, async () => {
         if (this.#games.get(game.channelId) !== game || game.revision !== revision) return;
         if (game.mode === 'bot') {
           await this.finish(
@@ -312,7 +324,7 @@ export class SquareGameManager {
             await this.eliminateAndContinue(game, timedOut, '시간 초과');
           }
         }
-      })().catch((error: unknown) => this.handleAsyncFailure(game, error));
+      }).catch((error: unknown) => this.handleAsyncFailure(game, error));
     }, 10_000);
   }
 
@@ -343,22 +355,26 @@ export class SquareGameManager {
     game.revision += 1;
   }
 
-  private async render(game: SquareGame, notice?: string): Promise<void> {
-    await game.message.edit({
+  private async render(game: SquareGame, notice?: string, finished = false): Promise<void> {
+    const previousMessage = game.statusMessage;
+    try {
+      await previousMessage.delete();
+    } catch (error: unknown) {
+      console.warn('이전 제곱수게임 현황 메시지를 삭제하지 못했습니다:', errorMessageForLog(error));
+    }
+    const nextMessage = await game.channel.send({
       content: `${content(game)}${notice ? `\n\n${notice}` : ''}`,
-      components: rows(game),
+      components: finished ? [] : rows(game),
       allowedMentions: { users: [] },
     });
+    game.statusMessage = nextMessage;
+    game.statusMessageId = nextMessage.id;
   }
 
   private async finish(game: SquareGame, result: string): Promise<void> {
     this.clearTimer(game);
     this.#games.delete(game.channelId);
-    await game.message.edit({
-      content: `${content(game)}\n\n${result}`,
-      components: [],
-      allowedMentions: { users: [] },
-    });
+    await this.render(game, result, true);
   }
 
   private clearTimer(game: SquareGame): void {
@@ -370,9 +386,27 @@ export class SquareGameManager {
     this.clearTimer(game);
     this.#games.delete(game.channelId);
     console.error('제곱수놀이 비동기 처리 실패:', error);
-    void game.message.edit({
-      content: '게임 처리 중 오류가 발생해 안전하게 종료했습니다.',
-      components: [],
-    });
+    void this.render(game, '게임 처리 중 오류가 발생해 안전하게 종료했습니다.', true).catch(
+      (renderError: unknown) => console.error('제곱수게임 오류 현황 전송 실패:', renderError),
+    );
   }
+
+  private async serialize<T>(channelId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.#queues.get(channelId) ?? Promise.resolve();
+    const current = previous.then(operation, operation);
+    const barrier = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.#queues.set(channelId, barrier);
+    void barrier.then(() => {
+      if (this.#queues.get(channelId) === barrier) this.#queues.delete(channelId);
+    });
+    return current;
+  }
+}
+
+function errorMessageForLog(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  return '알 수 없는 오류';
 }

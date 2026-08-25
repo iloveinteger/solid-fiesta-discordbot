@@ -5,6 +5,8 @@ export interface Config {
   applicationId: string;
   guildId?: string;
   stdictApiKey: string;
+  geminiApiKey?: string;
+  geminiModel: string;
 }
 
 function required(name: string): string {
@@ -13,12 +15,22 @@ function required(name: string): string {
   return value;
 }
 
+function optional(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  if (!value) return undefined;
+  return value;
+}
+
 export function loadConfig(): Config {
-  const guildId = process.env.DISCORD_GUILD_ID?.trim();
+  const guildId = optional('DISCORD_GUILD_ID');
+  const geminiApiKey = optional('GEMINI_API_KEY');
+  const geminiModel = optional('GEMINI_MODEL');
   return {
     discordToken: required('DISCORD_BOT_TOKEN'),
     applicationId: required('DISCORD_APPLICATION_ID'),
     ...(guildId ? { guildId } : {}),
     stdictApiKey: required('STDICT_API_KEY'),
+    ...(geminiApiKey ? { geminiApiKey } : {}),
+    geminiModel: geminiModel ?? 'gemini-3.7-flash',
   };
 }
