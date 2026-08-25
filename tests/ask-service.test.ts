@@ -80,6 +80,28 @@ describe('/ask', () => {
     expect(warn).toHaveBeenCalledOnce();
   });
 
+  it('설정 모델의 504 오류에는 새 타임아웃으로 안정 모델을 재시도한다', async () => {
+    const generateContent = vi
+      .fn<(params: GenerateContentParameters) => Promise<GenerateContentResponse>>()
+      .mockRejectedValueOnce(new ApiError({ status: 504, message: 'gateway timeout' }))
+      .mockResolvedValueOnce({ text: '이제야 제대로 답이 나왔습니다.' } as GenerateContentResponse);
+    const client = { models: { generateContent } } as unknown as Pick<GoogleGenAI, 'models'>;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const service = new AskService('test-key', 'gemini-3.7-flash', client);
+
+    await expect(service.answer('질문')).resolves.toBe('이제야 제대로 답이 나왔습니다.');
+
+    expect(generateContent.mock.calls.map(([request]) => request.model)).toEqual([
+      'gemini-3.7-flash',
+      'gemini-2.5-flash',
+    ]);
+    expect(generateContent.mock.calls[0]?.[0].config?.httpOptions?.timeout).toBe(8_000);
+    expect(generateContent.mock.calls[1]?.[0].config?.httpOptions?.timeout).toBe(12_000);
+    expect(generateContent.mock.calls[0]?.[0].config?.abortSignal).not.toBe(
+      generateContent.mock.calls[1]?.[0].config?.abortSignal,
+    );
+  });
+
   it('모델 출력을 마크다운 없는 한 문장으로 정리한다', () => {
     expect(normalizeAskAnswer('**첫 문장입니다.**\n둘째 문장입니다.')).toBe('첫 문장입니다.');
     expect(normalizeAskAnswer('짧게 답함')).toBe('짧게 답함.');

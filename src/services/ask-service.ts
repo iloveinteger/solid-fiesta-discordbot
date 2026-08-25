@@ -2,6 +2,7 @@ import { ApiError, GoogleGenAI } from '@google/genai';
 
 export const ASK_MAX_QUESTION_LENGTH = 500;
 const ASK_TIMEOUT_MS = 12_000;
+const ASK_PRIMARY_TIMEOUT_MS = 8_000;
 const ASK_MAX_RESPONSE_LENGTH = 300;
 const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
 
@@ -44,9 +45,7 @@ export class AskService {
     if (!normalizedQuestion || normalizedQuestion.length > ASK_MAX_QUESTION_LENGTH) {
       throw new Error(`질문은 1자 이상 ${ASK_MAX_QUESTION_LENGTH}자 이하로 입력하세요.`);
     }
-    const abortSignal = AbortSignal.timeout(ASK_TIMEOUT_MS);
-
-    const generate = async (model: string): Promise<string> => {
+    const generate = async (model: string, timeoutMs: number): Promise<string> => {
       const response = await client.models.generateContent({
         model,
         contents: normalizedQuestion,
@@ -54,8 +53,8 @@ export class AskService {
           systemInstruction:
             '질문에 반드시 한국어 한 문장으로만 짧게 답해. 말투는 약간 까칠하고 차갑게, 솔직하게 말해. 마크다운과 줄바꿈을 쓰지 마.',
           maxOutputTokens: 512,
-          abortSignal,
-          httpOptions: { timeout: ASK_TIMEOUT_MS },
+          abortSignal: AbortSignal.timeout(timeoutMs),
+          httpOptions: { timeout: timeoutMs },
         },
       });
       if (!response.text?.trim()) throw new EmptyGeminiResponseError();
@@ -63,17 +62,14 @@ export class AskService {
     };
 
     try {
-      return await generate(this.model);
+      return await generate(this.model, ASK_PRIMARY_TIMEOUT_MS);
     } catch (error: unknown) {
       if (error instanceof AskNotConfiguredError) throw error;
       logGeminiFailure(error, this.model);
-      const shouldFallback =
-        this.model !== GEMINI_FALLBACK_MODEL &&
-        ((error instanceof ApiError && (error.status === 400 || error.status === 404)) ||
-          error instanceof EmptyGeminiResponseError);
+      const shouldFallback = this.model !== GEMINI_FALLBACK_MODEL && isFallbackEligible(error);
       if (shouldFallback) {
         try {
-          return await generate(GEMINI_FALLBACK_MODEL);
+          return await generate(GEMINI_FALLBACK_MODEL, ASK_TIMEOUT_MS);
         } catch (fallbackError: unknown) {
           logGeminiFailure(fallbackError, GEMINI_FALLBACK_MODEL);
           throw userFacingGeminiError(fallbackError);
@@ -82,6 +78,17 @@ export class AskService {
       throw userFacingGeminiError(error);
     }
   }
+}
+
+function isFallbackEligible(error: unknown): boolean {
+  if (error instanceof EmptyGeminiResponseError) return true;
+  if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+    return true;
+  }
+  return (
+    error instanceof ApiError &&
+    (error.status === 400 || error.status === 404 || (error.status >= 500 && error.status <= 599))
+  );
 }
 
 function userFacingGeminiError(error: unknown): Error {
@@ -97,6 +104,11 @@ function userFacingGeminiError(error: unknown): Error {
   }
   if (error instanceof ApiError && error.status === 429) {
     return new Error('Gemini 요청 한도를 넘었습니다 (HTTP 429). 잠시 뒤 다시 시도하세요.', {
+      cause: error,
+    });
+  }
+  if (error instanceof ApiError && error.status >= 500 && error.status <= 599) {
+    return new Error(`Gemini 서버가 응답하지 못했습니다 (HTTP ${error.status}).`, {
       cause: error,
     });
   }
