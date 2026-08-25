@@ -3,6 +3,7 @@ import {
   type GenerateContentParameters,
   type GenerateContentResponse,
   type GoogleGenAI,
+  type Model,
 } from '@google/genai';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -13,7 +14,32 @@ import {
   AskNotConfiguredError,
   AskService,
   normalizeAskAnswer,
+  parseGeminiResponse,
+  selectLowUsageModel,
 } from '../src/services/ask-service.js';
+
+function responseWithText(text: string): GenerateContentResponse {
+  return {
+    candidates: [{ content: { role: 'model', parts: [{ text }] } }],
+  } as GenerateContentResponse;
+}
+
+function modelPager(...models: Model[]): AsyncIterable<Model> {
+  return {
+    [Symbol.asyncIterator]() {
+      let index = 0;
+      return {
+        next: () => {
+          const value = models[index];
+          index += 1;
+          return Promise.resolve(
+            value ? { done: false as const, value } : { done: true as const, value: undefined },
+          );
+        },
+      };
+    },
+  };
+}
 
 describe('/ask', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -57,14 +83,18 @@ describe('/ask', () => {
     await expect(service.answer('질문')).rejects.toBeInstanceOf(AskNotConfiguredError);
   });
 
-  it('설정 모델의 400 오류에는 공통 옵션으로 안정 모델을 한 번 재시도한다', async () => {
+  it('설정 모델의 404 오류에는 API 목록의 저사용량 모델로 재시도한다', async () => {
     const generateContent = vi
       .fn<(params: GenerateContentParameters) => Promise<GenerateContentResponse>>()
-      .mockRejectedValueOnce(new ApiError({ status: 400, message: 'invalid model option' }))
-      .mockResolvedValueOnce({
-        text: '그 정도는 다시 물을 필요도 없습니다.',
-      } as GenerateContentResponse);
-    const client = { models: { generateContent } } as unknown as Pick<GoogleGenAI, 'models'>;
+      .mockRejectedValueOnce(new ApiError({ status: 404, message: 'model not found' }))
+      .mockResolvedValueOnce(responseWithText('그 정도는 다시 물을 필요도 없습니다.'));
+    const list = vi.fn().mockResolvedValue(
+      modelPager({
+        name: 'models/gemini-3.5-flash-lite',
+        supportedActions: ['generateContent'],
+      }),
+    );
+    const client = { models: { generateContent, list } } as unknown as Pick<GoogleGenAI, 'models'>;
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const service = new AskService('test-key', 'custom-flash', client);
 
@@ -73,8 +103,23 @@ describe('/ask', () => {
     expect(generateContent).toHaveBeenCalledTimes(2);
     expect(generateContent.mock.calls.map(([request]) => request.model)).toEqual([
       'custom-flash',
-      'gemini-2.5-flash',
+      'models/gemini-3.5-flash-lite',
     ]);
+    expect(generateContent.mock.calls[0]?.[0].contents).toEqual([
+      { role: 'user', parts: [{ text: '질문' }] },
+    ]);
+    expect(generateContent.mock.calls[0]?.[0].config).toMatchObject({
+      maxOutputTokens: 128,
+      responseMimeType: 'text/plain',
+      systemInstruction: {
+        role: 'system',
+        parts: [
+          {
+            text: '질문에 반드시 한국어 한 문장으로만 짧게 답해. 말투는 약간 까칠하고 차갑게, 솔직하게 말해. 마크다운과 줄바꿈을 쓰지 마.',
+          },
+        ],
+      },
+    });
     expect(generateContent.mock.calls[0]?.[0].config).not.toHaveProperty('temperature');
     expect(generateContent.mock.calls[0]?.[0].config).not.toHaveProperty('thinkingConfig');
     expect(warn).toHaveBeenCalledOnce();
@@ -84,8 +129,14 @@ describe('/ask', () => {
     const generateContent = vi
       .fn<(params: GenerateContentParameters) => Promise<GenerateContentResponse>>()
       .mockRejectedValueOnce(new ApiError({ status: 504, message: 'gateway timeout' }))
-      .mockResolvedValueOnce({ text: '이제야 제대로 답이 나왔습니다.' } as GenerateContentResponse);
-    const client = { models: { generateContent } } as unknown as Pick<GoogleGenAI, 'models'>;
+      .mockResolvedValueOnce(responseWithText('이제야 제대로 답이 나왔습니다.'));
+    const list = vi.fn().mockResolvedValue(
+      modelPager({
+        name: 'models/gemini-3.5-flash-lite',
+        supportedActions: ['generateContent'],
+      }),
+    );
+    const client = { models: { generateContent, list } } as unknown as Pick<GoogleGenAI, 'models'>;
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const service = new AskService('test-key', 'gemini-3.7-flash', client);
 
@@ -93,13 +144,43 @@ describe('/ask', () => {
 
     expect(generateContent.mock.calls.map(([request]) => request.model)).toEqual([
       'gemini-3.7-flash',
-      'gemini-2.5-flash',
+      'models/gemini-3.5-flash-lite',
     ]);
     expect(generateContent.mock.calls[0]?.[0].config?.httpOptions?.timeout).toBe(8_000);
     expect(generateContent.mock.calls[1]?.[0].config?.httpOptions?.timeout).toBe(12_000);
     expect(generateContent.mock.calls[0]?.[0].config?.abortSignal).not.toBe(
       generateContent.mock.calls[1]?.[0].config?.abortSignal,
     );
+  });
+
+  it('지원 모델 목록에서 생성 가능한 안정 Flash-Lite를 우선 선택한다', () => {
+    expect(
+      selectLowUsageModel([
+        { name: 'models/gemini-pro', supportedActions: ['generateContent'] },
+        { name: 'models/gemini-3.5-flash-preview', supportedActions: ['generateContent'] },
+        { name: 'models/gemini-3.1-flash-lite', supportedActions: ['embedContent'] },
+        { name: 'models/gemini-3.5-flash-lite', supportedActions: ['generateContent'] },
+      ]),
+    ).toBe('models/gemini-3.5-flash-lite');
+  });
+
+  it('응답 candidates의 일반 텍스트만 합치고 thought 파트는 제외한다', () => {
+    expect(
+      parseGeminiResponse({
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [
+                { text: '내부 추론', thought: true },
+                { text: '첫 답변' },
+                { text: '둘째 답변' },
+              ],
+            },
+          },
+        ],
+      } as GenerateContentResponse),
+    ).toBe('첫 답변 둘째 답변');
   });
 
   it('모델 출력을 마크다운 없는 한 문장으로 정리한다', () => {

@@ -38,7 +38,7 @@
 | `DISCORD_APPLICATION_ID` | 예     | Discord 애플리케이션 ID                                                            |
 | `STDICT_API_KEY`         | 예     | 표준국어대사전 Open API 인증 키                                                    |
 | `GEMINI_API_KEY`         | 아니요 | `/ask`에서 사용하는 Google AI Studio API 키. 없으면 `/ask`만 비활성화됩니다.       |
-| `GEMINI_MODEL`           | 아니요 | Gemini 모델 ID. 기본값은 안정 버전 `gemini-3.7-flash`입니다.                       |
+| `GEMINI_MODEL`           | 아니요 | Gemini 모델 ID. 기본값은 저비용 안정 버전 `gemini-3.5-flash-lite`입니다.           |
 | `DISCORD_GUILD_ID`       | 아니요 | 개발 서버 ID. 설정하면 해당 서버에 명령어를 즉시 등록하고, 없으면 전역 등록합니다. |
 
 표준국어대사전 키와 Gemini 키는 애플리케이션 로그에 넣지 않습니다. `/ask`는 질문 원문이나 응답 전문도 로그에 남기지 않습니다. GitHub Actions CI는 외부 서비스에 접속하지 않아 Secret이 필요 없습니다. 배포 서버에서 `/ask`를 사용하려면 서버의 기존 `.env`에 `GEMINI_API_KEY`를 추가하세요.
@@ -149,7 +149,7 @@ journalctl -u discord-utility-bot.service -f
 - `/dict`: 국립국어원 표준국어대사전 Open API를 사용하며 입력과 응답을 검증합니다. 상세 버튼을 누르면 검색 결과 메시지가 선택한 뜻의 공개 상세 정보로 교체됩니다.
 - `/square`: 채널마다 게임 하나만 허용하고 사회자 모드는 최대 20명이 참가합니다.
 - `/square` 현황은 상태가 바뀔 때마다 새 메시지로 채널 하단에 다시 게시하고 약 0.1초 뒤 봇이 저장한 직전 현황 메시지만 삭제합니다. 봇전 선공은 무작위로 정합니다.
-- `/ask`: 질문은 최대 500자이며 각 API 호출에 제한 시간을 적용합니다. 질문과 최대 300자의 한국어 한 문장 답변을 함께 표시합니다. 설정 모델이 400/404, 5xx, 시간 초과 또는 빈 응답을 반환하면 `gemini-2.5-flash`로 한 번 재시도합니다.
+- `/ask`: 질문은 최대 500자이며 각 API 호출에 제한 시간을 적용합니다. 질문과 최대 300자의 한국어 한 문장 답변을 함께 표시합니다. 기본 모델은 저비용 `gemini-3.5-flash-lite`이며, 모델 오류 시 API가 반환한 모델 목록에서 `generateContent`를 지원하는 Flash-Lite를 우선 골라 한 번 재시도합니다.
 - `/binary`: `00000`~`11111` 중 하나를 균등하게 뽑습니다. 시작한 사용자의 5자리 이진수 추측마다 현황을 채널 하단에 새로 게시하고 약 0.1초 뒤 직전 현황만 삭제합니다. `/square`와 같은 채널에서 동시에 진행할 수 없습니다.
 - `/factole`: 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) Activity를 Discord 안에서 실행합니다.
 

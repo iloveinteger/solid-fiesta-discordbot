@@ -31,6 +31,6 @@ export function loadConfig(): Config {
     ...(guildId ? { guildId } : {}),
     stdictApiKey: required('STDICT_API_KEY'),
     ...(geminiApiKey ? { geminiApiKey } : {}),
-    geminiModel: geminiModel ?? 'gemini-3.7-flash',
+    geminiModel: geminiModel ?? 'gemini-3.5-flash-lite',
   };
 }
