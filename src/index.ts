@@ -8,6 +8,7 @@ import { AskService } from './services/ask-service.js';
 import { ExchangeService } from './services/exchange-service.js';
 import { FactorService } from './services/factor/factor-service.js';
 import { SquareGameManager } from './services/square-game-manager.js';
+import { SpellcheckService } from './services/spellcheck-service.js';
 
 const config = loadConfig();
 const client = new Client({
@@ -26,6 +27,7 @@ const handler = new CommandHandler({
   squareGames,
   binaryGames,
   askService: new AskService(config.geminiApiKey, config.geminiModel),
+  spellcheckService: new SpellcheckService(config.spellcheckApiToken),
 });
 
 client.once(Events.ClientReady, (readyClient) => {

@@ -15,6 +15,7 @@
 | `/factole`                   | 워들형 퍼즐 Factole을 Discord Activity로 실행합니다.                    |
 | `/dict word:<검색어>`        | 표준국어대사전 결과를 찾고 선택한 상세 정보로 공개 메시지를 교체합니다. |
 | `/ask question:<질문>`       | Gemini가 한국어 한 문장으로 짧고 약간 까칠하게 답합니다.                |
+| `/spell sentence:<문장>`     | 맞춤법을 검사하고 수정된 부분과 교정 문장을 표시합니다.                 |
 
 게임과 모든 캐시는 프로세스 메모리에만 존재합니다. 소인수분해 성공 결과는 실행 중 메모리에 캐시하며, 환율은 10분, 사전 검색은 3분, 사전 상세는 5분 캐시합니다. 재시작하면 캐시가 비워지고 진행 중 게임은 종료됩니다. 정상적인 `SIGTERM`/`SIGINT` 종료에서는 진행 중 게임 메시지를 종료 상태로 바꾸고 타이머를 정리하며, 비정상 종료 뒤 남은 버튼은 재시작 후 만료된 것으로 안내됩니다.
 
@@ -25,6 +26,7 @@
 - Discord 애플리케이션과 Bot Token
 - 표준국어대사전 Open API 키
 - `/ask`를 사용할 경우 Google AI Studio Gemini API 키
+- `/spell`을 사용할 경우 맞춤법 검사 API 토큰
 
 별도 데이터베이스나 컨테이너 런타임은 필요하지 않습니다.
 
@@ -39,9 +41,10 @@
 | `STDICT_API_KEY`         | 예     | 표준국어대사전 Open API 인증 키                                                    |
 | `GEMINI_API_KEY`         | 아니요 | `/ask`에서 사용하는 Google AI Studio API 키. 없으면 `/ask`만 비활성화됩니다.       |
 | `GEMINI_MODEL`           | 아니요 | Gemini 모델 ID. 기본값은 저비용 안정 버전 `gemini-3.5-flash-lite`입니다.           |
+| `SPELLCHECK_API_TOKEN`   | 아니요 | `/spell`에서 사용하는 맞춤법 검사 API의 Bearer 토큰입니다.                         |
 | `DISCORD_GUILD_ID`       | 아니요 | 개발 서버 ID. 설정하면 해당 서버에 명령어를 즉시 등록하고, 없으면 전역 등록합니다. |
 
-표준국어대사전 키와 Gemini 키는 애플리케이션 로그에 넣지 않습니다. `/ask`는 질문 원문이나 응답 전문도 로그에 남기지 않습니다. GitHub Actions CI는 외부 서비스에 접속하지 않아 Secret이 필요 없습니다. 배포 서버에서 `/ask`를 사용하려면 서버의 기존 `.env`에 `GEMINI_API_KEY`를 추가하세요.
+표준국어대사전 키, Gemini 키, 맞춤법 검사 API 토큰은 애플리케이션 로그에 넣지 않습니다. `/ask`는 질문 원문이나 응답 전문도 로그에 남기지 않습니다. GitHub Actions CI는 외부 서비스에 접속하지 않아 Secret이 필요 없습니다. 배포 서버에서 `/ask`를 사용하려면 서버의 기존 `.env`에 `GEMINI_API_KEY`를, `/spell`을 사용하려면 `SPELLCHECK_API_TOKEN`을 추가하세요.
 
 ## Discord 애플리케이션 설정
 
@@ -150,6 +153,7 @@ journalctl -u discord-utility-bot.service -f
 - `/square`: 채널마다 게임 하나만 허용하고 사회자 모드는 최대 20명이 참가합니다.
 - `/square` 현황은 상태가 바뀔 때마다 새 메시지로 채널 하단에 다시 게시하고 약 0.1초 뒤 봇이 저장한 직전 현황 메시지만 삭제합니다. 봇전 선공은 무작위로 정합니다.
 - `/ask`: 질문은 최대 500자이며 각 API 호출에 제한 시간을 적용합니다. 질문과 최대 300자의 한국어 한 문장 답변을 함께 표시합니다. 기본 모델은 저비용 `gemini-3.5-flash-lite`이며, 모델 오류 시 API가 반환한 모델 목록에서 `generateContent`를 지원하는 Flash-Lite를 우선 골라 한 번 재시도합니다.
+- `/spell`: 문장은 최대 300자이며 수정된 원문 부분을 취소선으로 표시하고 바로 아래에 교정 문장을 보여 줍니다. API의 순차 처리 시간을 고려해 190초 제한 시간을 적용합니다.
 - `/binary`: `00000`~`11111` 중 하나를 균등하게 뽑습니다. 시작한 사용자의 5자리 이진수 추측마다 현황을 채널 하단에 새로 게시하고 약 0.1초 뒤 직전 현황만 삭제합니다. `/square`와 같은 채널에서 동시에 진행할 수 없습니다.
 - `/factole`: 메시지를 읽지 않고 [Factole](https://ilovefloat.github.io/factole/) Activity를 Discord 안에서 실행합니다.
 

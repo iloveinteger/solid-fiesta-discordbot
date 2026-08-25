@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { ASK_MAX_QUESTION_LENGTH } from '../services/ask-service.js';
+import { SPELLCHECK_MAX_INPUT_LENGTH } from '../services/spellcheck-service.js';
 
 export const commandBuilders = [
   new SlashCommandBuilder()
@@ -49,6 +50,16 @@ export const commandBuilders = [
         .setDescription('질문 내용')
         .setRequired(true)
         .setMaxLength(ASK_MAX_QUESTION_LENGTH),
+    ),
+  new SlashCommandBuilder()
+    .setName('spell')
+    .setDescription('한국어 문장의 맞춤법을 검사합니다')
+    .addStringOption((option) =>
+      option
+        .setName('sentence')
+        .setDescription('검사할 문장')
+        .setRequired(true)
+        .setMaxLength(SPELLCHECK_MAX_INPUT_LENGTH),
     ),
 ];
 

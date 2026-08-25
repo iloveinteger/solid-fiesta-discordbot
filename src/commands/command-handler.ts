@@ -11,11 +11,13 @@ import {
 import type { StdictProvider } from '../providers/stdict-provider.js';
 import type { BinaryQuizManager } from '../services/binary-quiz-manager.js';
 import type { AskService } from '../services/ask-service.js';
+import type { SpellcheckService } from '../services/spellcheck-service.js';
 import type { ExchangeService } from '../services/exchange-service.js';
 import type { FactorService } from '../services/factor/factor-service.js';
 import { rollDice } from '../services/dice.js';
 import type { SquareGameManager } from '../services/square-game-manager.js';
 import { errorMessage, truncate } from '../utils/errors.js';
+import { formatSpellcheckResult } from '../utils/spellcheck-format.js';
 
 export interface CommandDependencies {
   factorService: FactorService;
@@ -24,6 +26,7 @@ export interface CommandDependencies {
   squareGames: SquareGameManager;
   binaryGames: BinaryQuizManager;
   askService: AskService;
+  spellcheckService: SpellcheckService;
 }
 
 export class CommandHandler {
@@ -69,6 +72,9 @@ export class CommandHandler {
           break;
         case 'ask':
           await this.ask(interaction);
+          break;
+        case 'spell':
+          await this.spellcheck(interaction);
           break;
       }
     } catch (error) {
@@ -171,6 +177,16 @@ export class CommandHandler {
     const answer = await this.dependencies.askService.answer(question);
     await interaction.editReply({
       content: `**질문:** ${escapeMarkdown(question)}\n**답변:** ${answer}`,
+      allowedMentions: { parse: [] },
+    });
+  }
+
+  private async spellcheck(interaction: ChatInputCommandInteraction): Promise<void> {
+    await interaction.deferReply();
+    const sentence = interaction.options.getString('sentence', true).trim();
+    const corrected = await this.dependencies.spellcheckService.correct(sentence);
+    await interaction.editReply({
+      content: formatSpellcheckResult(sentence, corrected),
       allowedMentions: { parse: [] },
     });
   }
