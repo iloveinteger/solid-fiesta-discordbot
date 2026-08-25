@@ -50,14 +50,14 @@ describe('/spell', () => {
     );
   });
 
-  it('교정된 원문 부분은 취소선, 누락된 문자는 누락 표식으로 표시한다', () => {
+  it('교정 전 원문과 교정 후 문장을 표시한다', () => {
     expect(
       formatSpellcheckResult(
         '나는 밥을 먹었어용. 그래서 죽엇어',
         '나는 밥을 먹었어요. 그래서 죽었어.',
       ),
     ).toBe(
-      '**교정 전**\n나는 밥을 먹었어~~용~~. 그래서 죽~~엇~~어~~[누락]~~\n' +
+      '**교정 전**\n나는 밥을 먹었어용. 그래서 죽엇어\n' +
         '**교정 후**\n나는 밥을 먹었어요. 그래서 죽었어.',
     );
   });
@@ -86,7 +86,7 @@ describe('/spell', () => {
     expect(deferReply).toHaveBeenCalledOnce();
     expect(correct).toHaveBeenCalledWith('틀린 문장');
     expect(editReply).toHaveBeenCalledWith({
-      content: '**교정 전**\n~~틀린~~ 문장\n**교정 후**\n고친 문장',
+      content: '**교정 전**\n틀린 문장\n**교정 후**\n고친 문장',
       allowedMentions: { parse: [] },
     });
   });
